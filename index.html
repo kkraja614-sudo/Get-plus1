@@ -291,34 +291,48 @@ async function plans(){
  const{data:ps}=ids.length?await sb.from('profiles').select('id,name,avatar_url,verified').in('id',ids):{data:[]};
  const P=Object.fromEntries((ps||[]).map(x=>[x.id,x])),L=Object.fromEntries((pc||[]).map(c=>[c.plan_id,c.link])),mine=Object.fromEntries((jn||[]).filter(j=>j.user_id===me.id).map(j=>[j.plan_id,j.status]));
  const sm='style="flex:0;padding:9px 12px;white-space:nowrap"';
+ const shown=(pl||[]).filter(x=>!BL.has(x.host_id)&&vis(x)&&(planKind==='All'||x.kind===planKind)).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
  content.innerHTML=`<div class="eyebrow">GROUP PLANS</div><h1>Plans near you</h1><p>Meet in a group, it feels safer. Join once the host approves your request.</p><button class="btn primary" style="width:100%" onclick="go('newplan')">+ Create a plan</button>
- ${(pl||[]).filter(x=>!BL.has(x.host_id)).map(x=>{const host=x.host_id===me.id,st=mine[x.id],reqs=(jn||[]).filter(j=>j.plan_id===x.id&&j.user_id!==me.id);
- return `<article class="card" style="margin-top:15px"><div class="card-body"><div class="name-line"><span class="name">${esc(x.title)}</span><span class="pill">${esc(x.kind)}</span></div><div class="meta">⌖ ${esc(x.city)} · ${esc(x.when_text)} · ${esc(x.place)}</div><p>${esc(x.note)}</p><div class="meta">Host: ${esc(P[x.host_id]?.name)}${P[x.host_id]?.verified?' ✓':''} · ${x.seats} people</div>
- ${host||st==='accepted'?`<button class="btn primary" style="width:100%;margin-bottom:8px" onclick="openPlanChat('${x.id}')">Open group chat${UN[x.id]?` (${UN[x.id]} new)`:''}</button>`:''}
+ <div class="filters" style="margin-top:6px">${['All','Movie','Cafe','Travel','Dinner','Outing'].map(k=>`<button class="chip ${planKind===k?'active':''}" onclick="planKind='${k}';render()">${k==='All'?'All plans':k+' plans'}</button>`).join('')}</div>
+ ${shown.map(x=>{const host=x.host_id===me.id,st=mine[x.id],reqs=(jn||[]).filter(j=>j.plan_id===x.id&&j.user_id!==me.id);
+ return `<article class="card" style="margin-top:15px"><div class="card-body"><div class="name-line"><span class="name">${esc(x.title)}</span><span style="display:flex;gap:6px;align-items:center">${Date.now()-new Date(x.created_at)<864e5?'<span class="pill" style="background:#1d3a33;color:#4fd1a5">New</span>':''}<span class="pill">${esc(x.kind)}</span>${host?`<button class="small-link" aria-label="Edit plan" style="font-size:18px;padding:6px 8px" onclick="editPlan('${x.id}')">✎</button>`:''}</span></div><div class="meta">⌖ ${esc(x.city)} · ${esc(x.when_text)} · ${esc(x.place)}</div><div class="meta" style="margin-top:-6px">Posted ${ago(x.created_at)}${x.audience&&x.audience!=='Everyone'?' · For '+(x.audience==='Men'?'men':'women')+' only':''}</div><p>${esc(x.note)}</p><div class="meta">Host: ${esc(P[x.host_id]?.name)}${P[x.host_id]?.verified?' ✓':''} · ${x.seats} people</div>
+ ${st==='accepted'||(host&&(jn||[]).some(j=>j.plan_id===x.id&&j.status==='accepted'))?`<button class="btn primary" style="width:100%;margin-bottom:8px" onclick="openPlanChat('${x.id}')">Open group chat${UN[x.id]?` (${UN[x.id]} new)`:''}</button>`:host?`<button class="btn secondary" style="width:100%;margin-bottom:8px;opacity:.85" onclick="noChatYet()">Open group chat</button>`:''}
  ${L[x.id]&&/^https?:\/\//.test(L[x.id])?`<a class="btn secondary" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px" href="${esc(L[x.id])}" target="_blank" rel="noopener">Open WhatsApp group</a>`:''}
  ${host&&x.min_offer?'<p style="font-size:12px">Offers are private. The highest offer is not auto-picked, you choose.</p>':''}
  ${host?reqs.map(j=>`<div class="match-row"><div class="round">${av(P[j.user_id]?.avatar_url,'◉')}</div><div class="rowcopy"><strong>${esc(P[j.user_id]?.name)}</strong><span>${esc(j.status)}${OF[x.id+':'+j.user_id]?' · offer ₹'+OF[x.id+':'+j.user_id]:''}${P[j.user_id]?.verified?' · Verified':''}</span></div>${j.status==='requested'?`<button class="btn primary" ${sm} onclick="${x.min_offer?`acceptOffer('${x.id}','${j.user_id}',${x.seats})`:`setJoin('${x.id}','${j.user_id}','accepted')`}">Accept</button><button class="btn secondary" ${sm} onclick="setJoin('${x.id}','${j.user_id}','declined')">✕</button>`:''}</div>`).join('')+`<button class="btn secondary" style="width:100%;margin-top:10px" onclick="delPlan('${x.id}')">Delete my plan</button>`
  :st?`<div class="actions"><span class="pill" style="padding:12px">${st==='accepted'?'✓ Accepted':st==='declined'?'Declined':'Requested'+(OF[x.id+':'+me.id]?' · offer ₹'+OF[x.id+':'+me.id]:'')}</span><button class="btn secondary" onclick="leavePlan('${x.id}')">Cancel</button></div>`
  :`<div class="actions">${x.min_offer?`<button class="btn primary" onclick="openOffer('${x.id}',${x.min_offer})">Make an offer · min ₹${x.min_offer}</button>`:`<button class="btn primary" onclick="joinPlan('${x.id}')">Request to join</button>`}</div>`}</div></article>`}).join('')||'<div class="panel" style="margin-top:15px">No plans yet. Be the first to create one!</div>'}`;
 }
-function newplan(){
- content.innerHTML=`<button class="small-link" onclick="go('plans')">← Back</button><h1>Create a plan</h1>
- <div class="field"><label>Title</label><input id="nt" placeholder="Sunday cafe meetup"></div>
- <div class="grid2"><div class="field"><label>Type</label><select id="nk">${['Movie','Cafe','Travel','Dinner','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div><div class="field"><label>City</label><select id="nc">${CITIES.map(c=>`<option>${c}</option>`).join('')}</select></div></div>
- <div class="field"><label>When</label><input id="nw" placeholder="Sun 16 Nov, 5 PM"></div>
- <div class="field"><label>Place (public places only)</label><input id="np"></div>
- <div class="field"><label>Total people</label><input id="ns" type="number" value="4"></div>
- <div class="field"><label>Minimum offer ₹ (optional, lets people make offers)</label><input id="nm" type="number" inputmode="numeric"></div>
- <div class="field"><label>Details</label><textarea id="nn" rows="3"></textarea></div>
- <div class="field"><label>WhatsApp group link (optional, visible only to accepted members)</label><input id="nl"></div>
- <button class="btn primary" style="width:100%" onclick="savePlan()">Post plan</button>`;
+let editId=null,planKind='All';
+const KINDS=['Movie','Cafe','Travel','Dinner','Outing','Other'];
+const vis=x=>x.host_id===me.id||!x.audience||x.audience==='Everyone'||(x.audience==='Men'&&mp?.gender==='Male')||(x.audience==='Women'&&mp?.gender==='Female');
+const ago=t=>{const m=Math.floor((Date.now()-new Date(t))/6e4);if(m<1)return'just now';if(m<60)return m+' min ago';const h=Math.floor(m/60);if(h<24)return h+(h>1?' hours':' hour')+' ago';return new Date(t).toLocaleDateString('en-IN',{day:'numeric',month:'short'})};
+function newplan(){planForm(null)}
+async function editPlan(id){const{data:p}=await sb.from('plans').select('*').eq('id',id).maybeSingle();if(!p)return toast('Plan not found');const{data:c}=await sb.from('plan_contacts').select('link').eq('plan_id',id).maybeSingle();planForm(p,c?.link)}
+function planForm(p,link){
+ editId=p?.id||null;const v=p||{},fem=mp?.gender==='Female';
+ content.innerHTML=`<button class="small-link" onclick="go('plans')">← Back</button><h1>${p?'Edit plan':'Create a plan'}</h1>
+ <div class="field"><label>Title</label><input id="nt" value="${esc(v.title)}" placeholder="Sunday cafe meetup"></div>
+ <div class="grid2"><div class="field"><label>Type</label><select id="nk">${KINDS.map(c=>`<option ${c===v.kind?'selected':''}>${c}</option>`).join('')}</select></div><div class="field"><label>City</label><select id="nc">${CITIES.map(c=>`<option ${c===v.city?'selected':''}>${c}</option>`).join('')}</select></div></div>
+ <div class="field"><label>Who can see this plan</label><select id="na">${[['Everyone','Everyone'],['Men','Men only'],['Women','Women only']].map(c=>`<option value="${c[0]}" ${c[0]===(v.audience||'Everyone')?'selected':''}>${c[1]}</option>`).join('')}</select></div>
+ <div class="field"><label>When</label><input id="nw" value="${esc(v.when_text)}" placeholder="Sun 16 Nov, 5 PM"></div>
+ <div class="field"><label>Place (public places only)</label><input id="np" value="${esc(v.place)}"></div>
+ <div class="field"><label>Total people</label><input id="ns" type="number" value="${v.seats||4}"></div>
+ ${fem?`<div class="field"><label>Minimum offer ₹ (optional, lets people make offers)</label><input id="nm" type="number" inputmode="numeric" value="${v.min_offer||''}"></div>`:''}
+ <div class="field"><label>Details</label><textarea id="nn" rows="3">${esc(v.note)}</textarea></div>
+ <div class="field"><label>WhatsApp group link (optional, visible only to accepted members)</label><input id="nl" value="${esc(link)}"></div>
+ <button class="btn primary" style="width:100%" onclick="savePlan()">${p?'Save changes':'Post plan'}</button>`;
 }
 async function savePlan(){
- const v={host_id:me.id,title:$('nt').value.trim(),kind:$('nk').value,city:$('nc').value,when_text:$('nw').value.trim(),place:$('np').value.trim(),seats:Math.min(20,Math.max(2,+$('ns').value||4)),note:$('nn').value.trim().slice(0,500),min_offer:+$('nm').value>=100?+$('nm').value:null};
+ const mo=$('nm');
+ const v={title:$('nt').value.trim(),kind:$('nk').value,city:$('nc').value,audience:$('na').value,when_text:$('nw').value.trim(),place:$('np').value.trim(),seats:Math.min(20,Math.max(2,+$('ns').value||4)),note:$('nn').value.trim().slice(0,500)};
+ if(mo)v.min_offer=+mo.value>=100?+mo.value:null;
  if(!v.title||!v.when_text||!v.place)return toast('Title, when and place are required');
- const{data,error}=await sb.from('plans').insert(v).select().single();if(error)return toast(error.code==='42501'?'Profile not approved yet':error.message);
- const l=$('nl').value.trim();if(l)await sb.from('plan_contacts').insert({plan_id:data.id,link:l});
- toast('Plan posted');go('plans');
+ const l=$('nl').value.trim();let id=editId;
+ if(id){const{error}=await sb.from('plans').update(v).eq('id',id);if(error)return toast(error.message);await sb.from('plan_contacts').delete().eq('plan_id',id)}
+ else{v.host_id=me.id;const{data,error}=await sb.from('plans').insert(v).select().single();if(error)return toast(error.code==='42501'?'Profile not approved yet':error.message);id=data.id}
+ if(l)await sb.from('plan_contacts').insert({plan_id:id,link:l});
+ toast(editId?'Plan updated':'Plan posted');editId=null;go('plans');
 }
 async function joinPlan(id){const{error}=await sb.from('plan_joins').insert({plan_id:id,user_id:me.id});toast(error?(error.code==='42501'?'Profile not approved yet':error.message):'Request sent');render()}
 async function leavePlan(id){await sb.from('plan_joins').delete().eq('plan_id',id).eq('user_id',me.id);render()}
@@ -335,6 +349,7 @@ async function viewSelfie(path){const w=window.open('','_blank');const{data,erro
 async function verifyUser(id,ok){const{error}=await sb.from('profiles').update(ok?{verified:true}:{verify_path:null}).eq('id',id);toast(error?error.message:ok?'Verified':'Rejected');render()}
 let AP={};
 let chatPlan=null,pchan=null,chatHost=null,offerPlan=null,introAmt=199;const PFEE=50,FREE_MSGS=3;
+function noChatYet(){const o=document.createElement('div');o.id='rv';o.className='rv';o.innerHTML=`<div class="rvp"><h2>Group chat is not open yet</h2><p>No one has joined your plan yet. When someone sends you a request and you accept it, the group chat opens.</p><button class="btn primary" style="width:100%" onclick="closeReview()">OK</button></div>`;o.onclick=e=>{if(e.target===o)closeReview()};document.body.append(o)}
 function openOffer(pid,min){offerPlan=pid;const o=document.createElement('div');o.id='rv';o.className='rv';
  o.innerHTML=`<div class="rvp"><div class="section-head" style="margin-top:0"><h2>Make an offer</h2><button class="small-link" onclick="closeReview()">Close</button></div><p>Only the host sees your offer. She chooses who to accept.</p><div class="field"><label>Your offer (₹), minimum ₹${min}</label><input id="oamt" type="number" inputmode="numeric" value="${min}"></div><div class="actions" style="margin:0 0 12px">${[0,500,1000].map(d=>`<button class="btn secondary" onclick="$('oamt').value=${min+d}">₹${min+d}</button>`).join('')}</div><p style="font-size:12px">The amount is paid to your companion directly when you meet. Plus1 charges ₹${PFEE} only if you keep chatting after 3 free messages. One offer per plan.</p><button class="btn primary" style="width:100%" onclick="sendOffer(${min})">Send offer</button></div>`;
  o.onclick=e=>{if(e.target===o)closeReview()};document.body.append(o)}
