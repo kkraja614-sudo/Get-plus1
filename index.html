@@ -68,6 +68,7 @@ h1{font-size:27px;line-height:1.13;margin:7px 0 6px;letter-spacing:-.8px}h2{font
 </nav><div class="toast" id="toast">Interest sent!</div>
 </div></div>
 <script>
+(function(){const show=m=>{const c=document.getElementById('content');if(c&&!c.innerHTML.trim())c.innerHTML='<div class="panel"><strong>Something went wrong</strong><p style="margin:6px 0 0;word-break:break-word">'+String(m).replace(/</g,'&lt;')+'</p></div>'};window.addEventListener('error',e=>show(e.message));window.addEventListener('unhandledrejection',e=>show(e.reason&&e.reason.message||e.reason));setTimeout(()=>show('Page did not load. Check internet or try again.'),6000)})();
 const SUPABASE_URL='https://rwtcqkpkhgvbinuruome.supabase.co',SUPABASE_KEY='sb_publishable_6J59VN_UDVbS4klmVtLWoA_BcnrCkwt';
 let sb;
 try{sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)}catch(e){
@@ -95,10 +96,11 @@ async function setUser(u){
  if(!me)page='discover';render();
 }
 function render(){
+ if(page!=='planchat'&&pchan){sb.removeChannel(pchan);pchan=null}
  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
  if(!me)return auth();
  if(page!=='matches')updateBadge();
- ({discover,matches,profile,admin,chat,pay,plans,newplan,intro,intros})[page]?.();
+ ({discover,matches,profile,admin,chat,pay,plans,newplan,intro,intros,planchat})[page]?.();
 }
 function auth(){
  if(landing)return landingPage();
@@ -262,11 +264,12 @@ async function saveProfile(){
 async function admin(){
  if(!mp?.is_admin)return go('discover');
  const[{data:ps},{data:rs},{data:pys}]=await Promise.all([sb.from('profiles').select('*').order('created_at',{ascending:false}),sb.from('reports').select('*').order('created_at',{ascending:false}),sb.from('payments').select('*').eq('status','pending').order('created_at')]);
- const{data:ips}=await sb.from('intro_requests').select('*').eq('status','pending').order('created_at');AP=Object.fromEntries(ps.map(p=>[p.id,p]));const N=Object.fromEntries(ps.map(p=>[p.id,p.name])),pend=ps.filter(p=>!p.approved&&!p.review_status),ver=ps.filter(p=>p.verify_path&&!p.verified),sm2='style="flex:0;padding:9px 12px;white-space:nowrap"';
+ const{data:ips}=await sb.from('intro_requests').select('*').eq('status','pending').order('created_at');const{data:cps}=await sb.from('plan_chat_unlocks').select('*').eq('status','pending').order('created_at');AP=Object.fromEntries(ps.map(p=>[p.id,p]));const N=Object.fromEntries(ps.map(p=>[p.id,p.name])),pend=ps.filter(p=>!p.approved&&!p.review_status),ver=ps.filter(p=>p.verify_path&&!p.verified),sm2='style="flex:0;padding:9px 12px;white-space:nowrap"';
  content.innerHTML=`<div class="eyebrow">CONTROL CENTRE</div><h1>Admin</h1>
  <div class="stats"><div class="stat"><strong>${ps.length}</strong><span>Members</span></div><div class="stat"><strong>${pend.length}</strong><span>Pending</span></div><div class="stat"><strong>${rs.length}</strong><span>Reports</span></div></div>
  <div class="section-head"><h2>Pending approvals</h2></div>${pend.map(p=>`<div class="match-row" style="cursor:pointer" onclick="openReview('${p.id}')"><div class="round">${av(p.avatar_url,'◉')}</div><div class="rowcopy"><strong>${esc(p.name)}, ${p.age}</strong><span>${esc(p.city)} · ${esc(p.bio)}</span></div><span class="pill">Review ›</span></div>`).join('')||'<div class="panel">All clear.</div>'}
  <div class="section-head"><h2>Payments to verify</h2><span class="pill">${(pys||[]).length}</span></div>${(pys||[]).map(y=>`<div class="match-row"><div class="rowcopy"><strong>${esc(N[y.payer_id])} → ${esc(N[y.other_id])}</strong><span>₹${FEE} · UTR ${esc(y.utr)}</span></div><button class="btn primary" style="flex:0;padding:9px 12px;white-space:nowrap" onclick="markPaid('${y.id}')">Mark paid</button></div>`).join('')||'<div class="panel">No pending payments.</div>'}
+ <div class="section-head"><h2>Chat payments to verify</h2><span class="pill">${(cps||[]).length}</span></div>${(cps||[]).map(y=>`<div class="match-row"><div class="rowcopy"><strong>${esc(N[y.user_id])}</strong><span>₹${PFEE} · UTR ${esc(y.utr)}</span></div><button class="btn primary" style="flex:0;padding:9px 12px;white-space:nowrap" onclick="markChat('${y.id}','paid')">Mark paid</button><button class="btn secondary" style="flex:0;padding:9px 12px" onclick="markChat('${y.id}','rejected')">✕</button></div>`).join('')||'<div class="panel">No pending chat payments.</div>'}
  <div class="section-head"><h2>Intro payments to verify</h2><span class="pill">${(ips||[]).length}</span></div>${(ips||[]).map(y=>`<div class="match-row"><div class="rowcopy"><strong>${esc(N[y.payer_id])} → ${esc(N[y.girl_id])}</strong><span>₹${IFEE} · UTR ${esc(y.utr)}</span></div><button class="btn primary" style="flex:0;padding:9px 12px;white-space:nowrap" onclick="markIntro('${y.id}','sent')">Mark paid</button><button class="btn secondary" style="flex:0;padding:9px 12px" onclick="markIntro('${y.id}','rejected')">✕</button></div>`).join('')||'<div class="panel">No pending intro payments.</div>'}
  <div class="section-head"><h2>Selfie verification</h2><span class="pill">${ver.length}</span></div>${ver.map(p=>`<div class="match-row"><div class="round">${av(p.avatar_url,'◉')}</div><div class="rowcopy"><strong>${esc(p.name)}</strong><span>${esc(p.city)}</span></div><button class="btn secondary" ${sm2} onclick="viewSelfie('${p.verify_path}')">View</button><button class="btn primary" ${sm2} onclick="verifyUser('${p.id}',true)">✓</button><button class="btn secondary" ${sm2} onclick="verifyUser('${p.id}',false)">✕</button></div>`).join('')||'<div class="panel">No selfies to review.</div>'}
  <div class="section-head"><h2>Reports</h2></div>${rs.map(r=>`<div class="match-row"><div class="rowcopy"><strong>${esc(N[r.reported_id])}</strong><span>by ${esc(N[r.reporter_id])}: ${esc(r.reason)}</span></div></div>`).join('')||'<div class="panel">No reports.</div>'}`;
@@ -290,7 +293,8 @@ async function plans(){
  content.innerHTML=`<div class="eyebrow">GROUP PLANS</div><h1>Plans near you</h1><p>Meet in a group, it feels safer. Join once the host approves your request.</p><button class="btn primary" style="width:100%" onclick="go('newplan')">+ Create a plan</button>
  ${(pl||[]).filter(x=>!BL.has(x.host_id)).map(x=>{const host=x.host_id===me.id,st=mine[x.id],reqs=(jn||[]).filter(j=>j.plan_id===x.id&&j.user_id!==me.id);
  return `<article class="card" style="margin-top:15px"><div class="card-body"><div class="name-line"><span class="name">${esc(x.title)}</span><span class="pill">${esc(x.kind)}</span></div><div class="meta">⌖ ${esc(x.city)} · ${esc(x.when_text)} · ${esc(x.place)}</div><p>${esc(x.note)}</p><div class="meta">Host: ${esc(P[x.host_id]?.name)}${P[x.host_id]?.verified?' ✓':''} · ${x.seats} people</div>
- ${L[x.id]&&/^https?:\/\//.test(L[x.id])?`<a class="btn secondary" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px" href="${esc(L[x.id])}" target="_blank" rel="noopener">Open group chat</a>`:''}
+ ${host||st==='accepted'?`<button class="btn primary" style="width:100%;margin-bottom:8px" onclick="openPlanChat('${x.id}')">Open group chat</button>`:''}
+ ${L[x.id]&&/^https?:\/\//.test(L[x.id])?`<a class="btn secondary" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px" href="${esc(L[x.id])}" target="_blank" rel="noopener">Open WhatsApp group</a>`:''}
  ${host?reqs.map(j=>`<div class="match-row"><div class="round">${av(P[j.user_id]?.avatar_url,'◉')}</div><div class="rowcopy"><strong>${esc(P[j.user_id]?.name)}</strong><span>${esc(j.status)}</span></div>${j.status==='requested'?`<button class="btn primary" ${sm} onclick="setJoin('${x.id}','${j.user_id}','accepted')">Accept</button><button class="btn secondary" ${sm} onclick="setJoin('${x.id}','${j.user_id}','declined')">✕</button>`:''}</div>`).join('')+`<button class="btn secondary" style="width:100%;margin-top:10px" onclick="delPlan('${x.id}')">Delete my plan</button>`
  :st?`<div class="actions"><span class="pill" style="padding:12px">${st==='accepted'?'✓ Accepted':st==='declined'?'Declined':'Requested'}</span><button class="btn secondary" onclick="leavePlan('${x.id}')">Cancel</button></div>`
  :`<div class="actions"><button class="btn primary" onclick="joinPlan('${x.id}')">Request to join</button></div>`}</div></article>`}).join('')||'<div class="panel" style="margin-top:15px">No plans yet. Be the first to create one!</div>'}`;
@@ -327,6 +331,34 @@ async function uploadSelfie(inp){
 async function viewSelfie(path){const w=window.open('','_blank');const{data,error}=await sb.storage.from('verify').createSignedUrl(path,300);if(error||!data){if(w)w.close();return toast(error?.message||'Cannot open')}if(w)w.location=data.signedUrl}
 async function verifyUser(id,ok){const{error}=await sb.from('profiles').update(ok?{verified:true}:{verify_path:null}).eq('id',id);toast(error?error.message:ok?'Verified':'Rejected');render()}
 let AP={};
+let chatPlan=null,pchan=null;const PFEE=50,FREE_MSGS=3;
+function openPlanChat(id){chatPlan=id;go('planchat')}
+async function planchat(){
+ const{data:pl}=await sb.from('plans').select('title').eq('id',chatPlan).maybeSingle();
+ content.innerHTML=`<button class="small-link" onclick="go('plans')">← Back</button><div class="eyebrow">GROUP CHAT</div><h2>${esc(pl?.title)}</h2><div id="pmsgs" style="display:flex;flex-direction:column;max-height:50vh;overflow:auto"></div><div id="pmbar"></div><p style="font-size:11px">Keep it respectful. Do not share phone numbers until you meet at the public place.</p>`;
+ await loadPM();pmBar();
+ pchan=sb.channel('pm'+chatPlan).on('postgres_changes',{event:'INSERT',schema:'public',table:'plan_messages',filter:'plan_id=eq.'+chatPlan},()=>loadPM()).subscribe();
+}
+const composer=()=>`<div class="field" style="flex-direction:row;gap:8px"><input id="pmi" style="flex:1" placeholder="Message" onkeydown="if(event.key==='Enter')sendPM()"><button class="btn primary" style="flex:0" onclick="sendPM()">Send</button></div>`;
+async function pmBar(){
+ const el=$('pmbar');if(!el)return;
+ if(mp?.gender!=='Male'){if(!$('pmi'))el.innerHTML=composer();return}
+ const[{count},{data:u}]=await Promise.all([sb.from('plan_messages').select('id',{count:'exact',head:true}).eq('plan_id',chatPlan).eq('user_id',me.id),sb.from('plan_chat_unlocks').select('*').eq('plan_id',chatPlan).eq('user_id',me.id).maybeSingle()]);
+ const left=FREE_MSGS-(count||0);
+ if(u?.status==='paid'||left>0){el.innerHTML=composer()+(u?.status==='paid'?'':`<p style="font-size:11px">${left} free message${left>1?'s':''} left, then ₹${PFEE} to continue.</p>`);return}
+ if(u?.status==='pending'){el.innerHTML=`<div class="panel"><strong>Verifying your payment</strong><p style="margin:6px 0 0">Chat unlocks once the admin confirms.</p></div>`;return}
+ el.innerHTML=`<div class="panel"><strong>Free messages used</strong><p style="margin:6px 0 10px">Pay ₹${PFEE} once to keep chatting in this plan.</p><strong>UPI ID: ${UPI_ID}</strong><a class="btn primary" style="display:block;text-align:center;text-decoration:none;margin:10px 0" href="upi://pay?pa=${UPI_ID}&pn=Plus1&am=${PFEE}&cu=INR">Pay ₹${PFEE} with UPI app</a><div class="field"><label>UPI reference / UTR number</label><input id="cutr" inputmode="numeric"></div><button class="btn primary" style="width:100%" onclick="submitChatPay()">I have paid</button>${u?.status==='rejected'?'<p style="color:#ff8a8a">Payment not found. Check the UTR and try again.</p>':''}</div>`;
+}
+async function submitChatPay(){const u=$('cutr').value.trim();if(!u)return toast('Enter the UTR number');const{error}=await sb.from('plan_chat_unlocks').upsert({plan_id:chatPlan,user_id:me.id,utr:u,status:'pending'},{onConflict:'plan_id,user_id'});toast(error?error.message:'Submitted. We will verify your payment');pmBar()}
+async function markChat(id,st){const{error}=await sb.from('plan_chat_unlocks').update({status:st}).eq('id',id);toast(error?error.message:st==='paid'?'Chat unlocked':'Rejected');render()}
+async function loadPM(){
+ const{data}=await sb.from('plan_messages').select('*').eq('plan_id',chatPlan).order('created_at').limit(200);
+ const ids=[...new Set((data||[]).map(m=>m.user_id))],{data:ps}=ids.length?await sb.from('profiles').select('id,name').in('id',ids):{data:[]},N=Object.fromEntries((ps||[]).map(p=>[p.id,p.name])),el=$('pmsgs');
+ if(!el)return;
+ el.innerHTML=(data||[]).map(m=>`<div class="bubble ${m.user_id===me.id?'me':''}">${m.user_id===me.id?'':`<small style="display:block;opacity:.7">${esc(N[m.user_id])}</small>`}${esc(m.body)}</div>`).join('')||'<div class="panel">No messages yet. Say hi!</div>';
+ el.scrollTop=el.scrollHeight;
+}
+async function sendPM(){const i=$('pmi'),t=i.value.trim();if(!t)return;i.value='';const{error}=await sb.from('plan_messages').insert({plan_id:chatPlan,user_id:me.id,body:t.slice(0,1000)});if(error)toast(error.code==='42501'?'Pay ₹'+PFEE+' to continue':error.message);else await loadPM();await pmBar();$('pmi')?.focus()}
 const IFEE=199,STL={pending:'Verifying payment',sent:'Waiting for her reply',accepted:'Contact shared',declined:'Declined, credit added',expired:'No reply, credit added',rejected:'Payment not found'};let introWith=null;
 function openIntro(id){introWith=id;go('intro')}
 async function intro(){
