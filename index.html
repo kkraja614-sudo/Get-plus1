@@ -330,9 +330,8 @@ async function blockUser(id,fromChat){
 }
 async function declineInt(id){const{error}=await sb.from('interests').delete().eq('from_id',id).eq('to_id',me.id);toast(error?error.message:'Declined');render()}
 async function plans(){
- await loadBL();
- const[{data:pl},{data:jn},{data:pc}]=await Promise.all([sb.from('plans').select('*').order('created_at',{ascending:false}),sb.from('plan_joins').select('*'),sb.from('plan_contacts').select('*')]);
- const[{data:pm},{data:pr},{data:po}]=await Promise.all([sb.from('plan_messages').select('plan_id,user_id,created_at').order('created_at',{ascending:false}).limit(500),sb.from('plan_reads').select('plan_id,last_read').eq('user_id',me.id),sb.from('plan_offers').select('plan_id,user_id,amount')]);const OF=Object.fromEntries((po||[]).map(o=>[o.plan_id+':'+o.user_id,o.amount]));const LR=Object.fromEntries((pr||[]).map(r=>[r.plan_id,new Date(r.last_read)])),UN={};(pm||[]).forEach(m=>{if(m.user_id!==me.id&&(!LR[m.plan_id]||new Date(m.created_at)>LR[m.plan_id]))UN[m.plan_id]=(UN[m.plan_id]||0)+1});
+ if(!/GROUP PLANS/.test(content.textContent))content.innerHTML='<div class="panel" style="margin-top:15px">Loading plans...</div>';
+ const[,{data:pl},{data:jn},{data:pc},{data:pm},{data:pr},{data:po}]=await Promise.all([loadBL(),sb.from('plans').select('*').order('created_at',{ascending:false}),sb.from('plan_joins').select('*'),sb.from('plan_contacts').select('*'),sb.from('plan_messages').select('plan_id,user_id,created_at').order('created_at',{ascending:false}).limit(500),sb.from('plan_reads').select('plan_id,last_read').eq('user_id',me.id),sb.from('plan_offers').select('plan_id,user_id,amount')]);const OF=Object.fromEntries((po||[]).map(o=>[o.plan_id+':'+o.user_id,o.amount]));const LR=Object.fromEntries((pr||[]).map(r=>[r.plan_id,new Date(r.last_read)])),UN={};(pm||[]).forEach(m=>{if(m.user_id!==me.id&&(!LR[m.plan_id]||new Date(m.created_at)>LR[m.plan_id]))UN[m.plan_id]=(UN[m.plan_id]||0)+1});
  const ids=[...new Set((pl||[]).map(x=>x.host_id).concat((jn||[]).map(x=>x.user_id)))];
  const{data:ps}=ids.length?await sb.from('profiles').select('id,name,avatar_url,verified,suspended').in('id',ids):{data:[]};
  const P=Object.fromEntries((ps||[]).map(x=>[x.id,x])),L=Object.fromEntries((pc||[]).map(c=>[c.plan_id,c.link])),mine=Object.fromEntries((jn||[]).filter(j=>j.user_id===me.id).map(j=>[j.plan_id,j.status]));
