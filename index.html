@@ -96,6 +96,7 @@ async function setUser(u){
  if(!me)page='discover';render();
 }
 function render(){
+ if(RECOV&&me)return newPwScreen();
  if(page!=='planchat'&&pchan){sb.removeChannel(pchan);pchan=null}
  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
  if(!me)return auth();
@@ -103,14 +104,24 @@ function render(){
  if(page!=='matches')updateBadge();
  ({discover,matches,profile,admin,chat,pay,plans,newplan,intro,intros,planchat})[page]?.();
 }
+
+let RECOV=/type=recovery/.test(location.hash);
+async function forgotPw(){const e=$('ae').value.trim();if(!e)return toast('Enter your email first');
+ const{error}=await sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin+location.pathname});
+ toast(error?error.message:'Reset link sent. Check inbox and spam')}
+function newPwScreen(){
+ content.innerHTML=`<div class="eyebrow">RESET PASSWORD</div><h1>Set a new password</h1><p>Choose a new password for your account.</p><div class="field"><label>New password</label><input id="np1" type="password" autocomplete="new-password"></div><div class="field"><label>Confirm password</label><input id="np2" type="password" autocomplete="new-password"></div><button class="btn primary" style="width:100%" onclick="saveNewPw()">Save password</button>`}
+async function saveNewPw(){const a=$('np1').value,b=$('np2').value;if(a.length<6)return toast('Minimum 6 characters');if(a!==b)return toast('Passwords do not match');
+ const{error}=await sb.auth.updateUser({password:a});if(error)return toast(error.message);
+ RECOV=false;history.replaceState(null,'',location.pathname);toast('Password updated');go('discover')}
 function auth(){
  if(landing)return landingPage();
  const up=authMode==='up';
  content.innerHTML=`<div class="eyebrow">WELCOME</div><h1>Find someone to<br>make plans with.</h1><p>${up?'Create your account. 18+ only.':'Log in to continue.'}</p>
  ${up?`<div class="field"><label>Display name</label><input id="an"></div><div class="grid2"><div class="field"><label>Age (18+)</label><input id="aa" type="number"></div><div class="field"><label>City</label><select id="ac">${CITIES.map(c=>`<option>${c}</option>`).join('')}</select></div></div><div class="grid2"><div class="field"><label>I am</label><select id="ag"><option>Male</option><option>Female</option><option>Other</option></select></div><div class="field"><label>Interested in</label><select id="ai"><option>Everyone</option><option>Women</option><option>Men</option></select></div></div><div class="field"><label>Mobile number (private)</label><input id="ao" type="tel" inputmode="numeric"></div>`:''}
- <div class="field"><label>Email</label><input id="ae" type="email"></div><div class="field"><label>Password</label><div class="pwrow"><input id="ap" type="password" autocomplete="${up?'new-password':'current-password'}"><button type="button" class="eye" id="eyeb" onclick="togglePw()" aria-label="Show password">${EYE}</button></div></div>
+ <div class="field"><label>${up?'Email (use this to log in)':'Email (the one you signed up with)'}</label><input id="ae" type="email" autocomplete="username"></div><div class="field"><label>Password</label><div class="pwrow"><input id="ap" type="password" autocomplete="${up?'new-password':'current-password'}"><button type="button" class="eye" id="eyeb" onclick="togglePw()" aria-label="Show password">${EYE}</button></div></div>
  ${up?`<label style="display:flex;gap:8px;font-size:12px;margin:12px 0;align-items:flex-start"><input type="checkbox" id="ag2" style="margin-top:2px"><span>I'm 18+ and agree to the <a href="#" onclick="showTerms();return false" style="color:var(--pink)">Terms &amp; Safety rules</a></span></label>`:''}<button class="btn primary" style="width:100%" onclick="doAuth()">${up?'Create account':'Log in'}</button>
- <p style="text-align:center"><button class="small-link" onclick="authMode='${up?'in':'up'}';auth()">${up?'Have an account? Log in':'New here? Sign up'}</button></p>`;
+ ${up?'':'<p style="text-align:center;margin:12px 0 0"><button class="small-link" onclick="forgotPw()">Forgot password?</button></p>'}<p style="text-align:center"><button class="small-link" onclick="authMode='${up?'in':'up'}';auth()">${up?'Have an account? Log in':'New here? Sign up'}</button></p>`;
 }
 function landingPage(){
  const g=m=>`landing=false;authMode='${m}';auth()`;
@@ -134,7 +145,7 @@ async function doAuth(){
   const age=+$('aa').value,name=$('an').value.trim();
   const ph=$('ao').value.trim();if(!name||!(age>=18))return toast('Name and age 18+ required');if(!/^\d{10}$/.test(ph))return toast('Enter 10 digit mobile');if(!$('ag2').checked)return toast('Please accept the Terms & Safety rules');
   r=await sb.auth.signUp({email:e,password:p,options:{data:{name,age,city:$('ac').value,gender:$('ag').value,interested_in:$('ai').value,phone:ph}}});
-  if(!r.error&&!r.data.session)return toast('Check your email to confirm');
+  if(!r.error&&!r.data.session)return toast('Check your email to confirm, then log in with it');if(!r.error)toast('Account created. Use this email to log in next time');
  }else r=await sb.auth.signInWithPassword({email:e,password:p});
  if(r.error)toast(r.error.message);
 }
@@ -174,7 +185,7 @@ async function discover(){
  const[{data:ps},{sent,got}]=await Promise.all([sb.from('profiles').select('*').eq('approved',true).neq('id',me.id).order('created_at',{ascending:false}),ints()]);
  const k=selected.replace('Movies','Movie'),list=(ps||[]).filter(p=>!p.suspended&&!BL.has(p.id)&&fit(mp||{},p)&&fit(p,mp||{})).filter(p=>selected==='All'||(p.looking_for||'').startsWith(k)||(p.looking_for||'').startsWith('Open'));
  content.innerHTML=`<div class="eyebrow">MEET YOUR PLUS1</div><h1>Find someone to<br>make plans with.</h1><p>Connect only when interest is mutual.</p><button class="small-link" style="display:block;margin:-6px 0 10px" onclick="invite()">+ Invite a friend on WhatsApp</button>
- ${mp?.approved?'':mp?.review_status?reviewPanel(mp):'<div class="panel"><strong>Profile pending approval</strong><p style="margin:5px 0 0">You can browse now. You can send interests once an admin approves your profile.</p></div>'}
+ ${mp?.approved?'':mp?.review_status?reviewPanel(mp):mp?.needs_verify&&(!mp.verify_path||!mp.voice_path)?'<div class="panel"><strong>Complete verification</strong><p style="margin:5px 0 10px">Add your selfie and a short voice check so we can approve your profile.</p><button class="btn primary" style="width:100%" onclick="go(\'profile\')">Verify now</button></div>':'<div class="panel"><strong>Profile pending approval</strong><p style="margin:5px 0 0">You can browse now. You can send interests once an admin approves your profile.</p></div>'}
  <div class="filters">${['All','Movies','Cafe','Travel','Dinner'].map(x=>`<button class="chip ${selected===x?'active':''}" onclick="selected='${x}';render()">${x}</button>`).join('')}</div>
  ${list.map(p=>`<article class="card">${p.avatar_url?`<div class="profile-art photo" style="background-image:url('${esc(p.avatar_url)}')"><span class="art-label">♡ ${esc(p.city)}</span></div>`:`<div class="profile-art ${art(p.name)}"><div class="silhouette"></div><span class="art-label">No photo yet</span></div>`}<div class="card-body"><div class="name-line"><span class="name">${esc(p.name)}, ${p.age}</span>${p.verified?'<span class="verified">✓ Verified</span>':''}</div><div class="meta">⌖ ${esc(p.city)} · ${esc(p.looking_for)}</div><p>${esc(p.bio)}</p><div class="tags">${(p.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="actions"><button class="btn secondary" style="flex:0" onclick="report('${p.id}')">⚑</button><button class="btn secondary" style="flex:0" onclick="blockUser('${p.id}')">🚫</button><button class="btn primary" ${sent.has(p.id)||lockOf(p,got)?'disabled':''} onclick="sendInterest('${p.id}')">${lockOf(p,got)||(sent.has(p.id)&&got.has(p.id)?'Matched ✓':sent.has(p.id)?'Interest sent ✓':'Send interest')}</button>${mp?.gender==='Male'&&mp.approved&&p.gender==='Female'&&p.open_to_intros?`<button class="btn secondary" onclick="openIntro('${p.id}')">Intro ₹${IFEE}</button>`:''}</div></div></article>`).join('')||'<div class="panel">No profiles here yet.</div>'}`;
 }
@@ -261,9 +272,10 @@ async function send(){
  const{error}=await sb.from('messages').insert({from_id:me.id,to_id:chatWith,body:t});
  if(error)toast(error.message);loadMsgs();
 }
-function profile(){
+function profile(){profile0();renderV()}
+function profile0(){
  const p=mp||{};
- content.innerHTML=`<div class="eyebrow">YOUR SPACE</div><h1>My profile</h1>${reviewPanel(p)}<div class="panel" style="text-align:center"><div class="round" style="width:84px;height:84px;border-radius:50%;margin:0 auto 10px;font-size:30px">${av(p.avatar_url,'◉')}</div><strong style="font-size:18px">${esc(p.name)} · ${p.age}</strong><p>${esc(p.city)}</p><span class="pill">${p.approved?'✓ Approved':'Pending approval'}</span><label class="btn secondary" style="display:block;margin-top:12px;cursor:pointer">📷 ${p.avatar_url?'Change':'Add'} photo<input type="file" accept="image/*" hidden onchange="uploadDP(this)"></label></div>
+ content.innerHTML=`<div class="eyebrow">YOUR SPACE</div><h1>My profile</h1>${reviewPanel(p)}${vPanelHost(p)}<div class="panel" style="text-align:center"><div class="round" style="width:84px;height:84px;border-radius:50%;margin:0 auto 10px;font-size:30px">${av(p.avatar_url,'◉')}</div><strong style="font-size:18px">${esc(p.name)} · ${p.age}</strong><p>${esc(p.city)}</p><span class="pill">${p.approved?'✓ Approved':'Pending approval'}</span><label class="btn secondary" style="display:block;margin-top:12px;cursor:pointer">📷 ${p.avatar_url?'Change':'Add'} photo<input type="file" accept="image/*" hidden onchange="uploadDP(this)"></label></div>
  ${p.verified?'<div class="panel"><span class="pill" style="background:#1d3a33;color:#4fd1a5">✓ Verified</span><p style="margin:8px 0 0">Your profile shows a Verified badge.</p></div>':`<div class="panel"><strong>Get verified</strong><p style="margin:5px 0 8px">Take a clear selfie of your face. Our team compares it with your profile photo and adds a Verified badge. Your selfie stays private and is never shown to others.</p>${p.verify_path?'<span class="pill">Under review</span>':''}<label class="btn secondary" style="display:block;margin-top:8px;cursor:pointer;text-align:center">🤳 ${p.verify_path?'Retake':'Take'} selfie<input type="file" accept="image/*" capture="user" hidden onchange="uploadSelfie(this)"></label></div>`}
  ${p.gender==='Female'?`<div class="panel"><label style="display:flex;gap:10px;align-items:center;font-size:13px"><input type="checkbox" ${p.open_to_intros?'checked':''} onchange="setOpen(this.checked)"> Open to intro requests</label><button class="small-link" style="margin-top:8px" onclick="go('intros')">View intro requests</button></div>`:''}<div class="field"><label>Display name</label><input id="pn" value="${esc(p.name)}"></div>
  <div class="grid2"><div class="field"><label>Age (18+)</label><input id="pa" type="number" value="${p.age}"></div><div class="field"><label>City</label><select id="pc">${CITIES.map(c=>`<option ${c===p.city?'selected':''}>${c}</option>`).join('')}</select></div></div>
@@ -473,23 +485,51 @@ async function intros(){
  content.innerHTML=`<button class="small-link" onclick="go('matches')">← Back</button><div class="eyebrow">INTRO REQUESTS</div><h1>${girl?'Requests for you':'Your requests'}</h1>${girl?'':`<p>Credits: ${mp?.intro_credits||0}</p>`}${rs.map(row).join('')||'<div class="panel">Nothing here yet.</div>'}`;
 }
 const REASONS=['No photo or photo is not clear','Photo looks fake or taken from the internet','Selfie does not match profile photo','Profile is incomplete (bio, age, city)','Inappropriate content','Other'];
+
+let VS={phase:'idle'};
+function vPanelHost(p){return p.gender==='Female'&&p.needs_verify&&!p.approved?'<div id="vbox"></div>':''}
+function renderV(){
+ const b=$('vbox');if(!b||!mp)return;const p=mp,code=p.voice_code,tick=x=>x?'✅':'⬜',say=`Say: <b>"Hi, I'm ${esc(p.name)}, my code is ${esc(code)}"</b>`;let body='';
+ if(VS.phase==='rec')body=`<p style="margin:0 0 10px">${say}</p><div style="display:flex;align-items:center;gap:10px"><span style="color:#ff6b6b">●</span><span id="vt" style="flex:1">Recording 0:00</span><button class="btn primary" style="flex:0" onclick="vStop()">Stop</button></div>`;
+ else if(VS.phase==='review')body=`<p style="margin:0 0 10px">Your code: <b>${esc(code)}</b></p><audio controls src="${VS.url}" style="width:100%"></audio><div class="grid2" style="margin-top:10px"><button class="btn secondary" onclick="vRedo()">Redo</button><button class="btn primary" onclick="vSubmit()">Submit</button></div>`;
+ else if(p.voice_path)body=`<span class="pill">Voice submitted · under review</span><button class="btn secondary" style="width:100%;margin-top:10px" onclick="startVoiceCheck()">Record again</button>`;
+ else if(!code)body=`<p style="margin:0 0 10px">Record a 5 sec voice note so we know you are a real girl. You will get a random code to say.</p><button class="btn primary" style="width:100%" onclick="startVoiceCheck()">🎤 Start voice check</button>`;
+ else body=`<p style="margin:0 0 10px">${say}</p><button class="btn primary" style="width:100%" onclick="vStart()">● Record</button>`;
+ b.innerHTML=`<div class="panel"><strong>Verification needed</strong><p style="margin:5px 0 10px">Finish all 3 steps. Our team then approves your profile. Selfie and voice stay private.</p><div style="font-size:13px;line-height:1.9;margin-bottom:8px">${tick(p.avatar_url)} Profile photo<br>${tick(p.verify_path)} Selfie (below)<br>${tick(p.voice_path)} Voice check</div>${body}</div>`}
+async function startVoiceCheck(){const{data,error}=await sb.rpc('start_voice_check');if(error)return toast(error.message);if(!data)return toast('Not needed');mp={...mp,voice_code:data,voice_path:null};VS={phase:'idle'};renderV()}
+async function vStart(){
+ try{const st=await navigator.mediaDevices.getUserMedia({audio:true}),mt=window.MediaRecorder&&(MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':MediaRecorder.isTypeSupported('audio/mp4')?'audio/mp4':''),mr=new MediaRecorder(st,mt?{mimeType:mt}:undefined),ch=[];
+ mr.ondataavailable=e=>{if(e.data.size)ch.push(e.data)};VS={phase:'rec',t0:Date.now(),mr};
+ mr.onstop=()=>{clearInterval(VS.timer);st.getTracks().forEach(t=>t.stop());const type=(mr.mimeType||mt||'audio/webm').split(';')[0],blob=new Blob(ch,{type});if(Date.now()-VS.t0<2000){VS={phase:'idle'};renderV();return toast('Too short, try again')}VS={phase:'review',blob,type,url:URL.createObjectURL(blob)};renderV()};
+ mr.start();VS.timer=setInterval(()=>{const s=Math.floor((Date.now()-VS.t0)/1000),e=$('vt');if(e)e.textContent='Recording 0:'+String(s).padStart(2,'0');if(s>=15)vStop()},300);renderV()
+ }catch(e){toast('Allow microphone to record')}}
+function vStop(){if(VS.phase==='rec')try{VS.mr.stop()}catch(e){}}
+function vRedo(){VS={phase:'idle'};renderV()}
+async function vSubmit(){const{blob,type}=VS;if(!blob||!mp?.voice_code)return toast('Start voice check first');toast('Uploading...');
+ const ext=type.includes('mp4')?'m4a':type.includes('ogg')?'ogg':'webm',path=`${me.id}/voice-${Date.now()}.${ext}`;
+ try{const{error}=await sb.storage.from('verify').upload(path,blob,{contentType:type});if(error)throw error;
+ const{data,error:e2}=await sb.from('profiles').update({voice_path:path}).eq('id',me.id).select().single();if(e2)throw e2;mp=data;VS={phase:'idle'};toast('Voice submitted');renderV()}catch(e){toast(e.message||'Upload failed')}}
+async function viewVoice(path){const{data,error}=await sb.storage.from('verify').createSignedUrl(path,300);if(error||!data)return toast(error?.message||'Cannot open');
+ const o=document.createElement('div');o.className='rv';o.style.alignItems='center';o.innerHTML=`<div class="rvp" style="border-radius:24px;max-width:340px"><audio controls autoplay src="${esc(data.signedUrl)}" style="width:100%"></audio><button class="btn secondary" style="width:100%;margin-top:10px">Close</button></div>`;o.querySelector('button').onclick=()=>o.remove();o.onclick=e=>{if(e.target===o)o.remove()};document.body.append(o)}
 function openReview(id){
- const p=AP[id];if(!p)return;
- const rows=[['City',p.city],['Gender',p.gender],['Interested in',p.interested_in],['Looking for',p.looking_for],['Phone',p.phone],['Bio',p.bio||'Not filled'],['Activities',(p.tags||[]).join(', ')],['Photo',p.avatar_url?'Uploaded':'None'],['Selfie',p.verify_path?'Submitted':'Not submitted']];
+ const p=AP[id];if(!p)return;const lock=p.needs_verify&&(!p.verify_path||!p.voice_path);
+ const rows=[['City',p.city],['Gender',p.gender],['Interested in',p.interested_in],['Looking for',p.looking_for],['Phone',p.phone],['Bio',p.bio||'Not filled'],['Activities',(p.tags||[]).join(', ')],['Photo',p.avatar_url?'Uploaded':'None'],['Selfie',p.verify_path?'Submitted':'Not submitted'],...(p.needs_verify?[['Voice check',p.voice_path?'Submitted':'Not submitted'],['Voice code',p.voice_code||'—']]:[])];
  const o=document.createElement('div');o.id='rv';o.className='rv';
  o.innerHTML=`<div class="rvp"><div class="section-head" style="margin-top:0"><h2>${esc(p.name)}, ${p.age}</h2><button class="small-link" onclick="closeReview()">Close</button></div>
  ${p.avatar_url?`<img class="rvimg" src="${esc(p.avatar_url)}" alt="">`:'<div class="panel">No profile photo uploaded.</div>'}
  ${p.verify_path?`<button class="btn secondary" style="width:100%;margin-top:10px" onclick="viewSelfie('${esc(p.verify_path)}')">View selfie</button>`:''}
+ ${p.voice_path?`<button class="btn secondary" style="width:100%;margin-top:10px" onclick="viewVoice('${esc(p.voice_path)}')">▶ Play voice (code: ${esc(p.voice_code||'')})</button>`:''}
+ ${lock?'<div class="panel"><strong>Waiting for user</strong><p style="margin:5px 0 0">Selfie and voice are both needed before approval.</p></div>':''}
  <div class="panel">${rows.map(r=>`<div class="rvrow"><span>${r[0]}</span><b>${esc(r[1]||'—')}</b></div>`).join('')}</div>
- <div class="panel"><strong>Check before approving</strong>${['Photo is clear and shows one real person','Selfie matches the profile photo','Reverse image search is clean'].map(t=>`<label class="rvchk"><input type="checkbox" onchange="rvGate()"> ${t}</label>`).join('')}</div>
- <button class="btn primary" id="rvOk" style="width:100%" disabled onclick="rvDo('${p.id}','approve')">Approve</button>
+ <div class="panel"><strong>Check before approving</strong>${['Photo is clear and shows one real person','Selfie matches the profile photo','Reverse image search is clean',...(p.needs_verify?['Voice says the code and sounds like a real girl']:[])].map(t=>`<label class="rvchk"><input type="checkbox" onchange="rvGate()"> ${t}</label>`).join('')}</div>
+ <button class="btn primary" id="rvOk" style="width:100%" ${lock?'data-lock="1"':''} disabled onclick="rvDo('${p.id}','approve')">Approve</button>
  <div class="grid2" style="margin-top:10px"><button class="btn secondary" onclick="rvShow('rvNeed')">Ask for changes</button><button class="btn secondary" onclick="rvShow('rvRej')">Reject</button></div>
  <div class="panel hidden" id="rvNeed"><div class="field"><label>What should the user fix? (user will see this)</label><textarea id="rvNote" rows="3"></textarea></div><button class="btn primary" style="width:100%" onclick="rvDo('${p.id}','needs_changes')">Send request</button></div>
  <div class="panel hidden" id="rvRej"><div class="field"><label>Reason</label><select id="rvReason"><option value="">Select a reason</option>${REASONS.map(r=>`<option>${r}</option>`).join('')}</select></div><div class="field"><label>Note (required for Other)</label><textarea id="rvRN" rows="2"></textarea></div><button class="btn primary" style="width:100%;background:#ff6b6b" onclick="rvDo('${p.id}','rejected')">Confirm reject</button></div></div>`;
  o.onclick=e=>{if(e.target===o)closeReview()};document.body.append(o);
 }
 function closeReview(){const o=$('rv');if(o)o.remove()}
-function rvGate(){$('rvOk').disabled=![...document.querySelectorAll('#rv input[type=checkbox]')].every(c=>c.checked)}
+function rvGate(){$('rvOk').disabled=$('rvOk').dataset.lock==='1'||![...document.querySelectorAll('#rv input[type=checkbox]')].every(c=>c.checked)}
 function rvShow(id){['rvNeed','rvRej'].forEach(x=>$(x).classList.toggle('hidden',x!==id||!$(x).classList.contains('hidden')))}
 async function rvDo(id,act){
  let u,m;
@@ -504,7 +544,7 @@ const reviewPanel=p=>p?.review_status?`<div class="panel"><strong>${p.review_sta
 async function resubmit(){const{data,error}=await sb.from('profiles').update({review_status:null,review_note:null}).eq('id',me.id).select().single();if(error)return toast(error.message);mp=data;toast('Sent for review again');render()}
 async function approve(id){const{error}=await sb.from('profiles').update({approved:true}).eq('id',id);toast(error?error.message:'Approved');render()}
 document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
-sb.auth.onAuthStateChange((_,s)=>{if((s?.user?.id||null)!==(me?.id||null))setUser(s?.user)});
+sb.auth.onAuthStateChange((ev,s)=>{if(ev==='PASSWORD_RECOVERY')RECOV=true;if((s?.user?.id||null)!==(me?.id||null))setUser(s?.user)});
 setInterval(()=>{if(me)updateBadge()},30000);
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 sb.auth.getSession().then(({data})=>setUser(data.session?.user));
