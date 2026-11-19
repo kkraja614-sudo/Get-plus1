@@ -306,7 +306,7 @@ function profile0(){
  <div class="field"><label>Looking for</label><select id="pl">${LOOK.map(c=>`<option ${c===p.looking_for?'selected':''}>${c}</option>`).join('')}</select></div>
  <div class="field"><label>Who can send me interest</label><select id="pw">${[['Everyone','Everyone'],['Photo','Members with a photo'],['Verified','Verified members only']].map(c=>`<option value="${c[0]}" ${c[0]===(p.who_can_interest||'Everyone')?'selected':''}>${c[1]}</option>`).join('')}</select></div>
  <button class="btn primary" style="width:100%" onclick="saveProfile()">Save changes</button>
- <button class="btn secondary" style="width:100%;margin-bottom:10px" onclick="invite()">Invite a friend</button><p style="text-align:center"><button class="small-link" onclick="showTerms()">Terms &amp; Safety rules</button></p><button class="btn secondary" style="width:100%;margin-top:10px" onclick="sb.auth.signOut()">Log out</button>`;
+ <button class="btn secondary" style="width:100%;margin-bottom:10px" onclick="invite()">Invite a friend</button><p style="text-align:center"><button class="small-link" onclick="showTerms()">Terms &amp; Safety rules</button></p><button class="btn secondary" style="width:100%;margin-top:10px" onclick="sb.auth.signOut()">Log out</button><button class="small-link" style="color:#ff6b6b;display:block;margin:20px auto 0" onclick="showDelete()">Delete my account</button>`;
 }
 async function uploadDP(inp){
  const f=inp.files[0];if(!f)return;toast('Uploading...');
@@ -393,6 +393,22 @@ async function setMeetPref(v){const{error}=await sb.rpc('set_meet_pref',{v});if(
 function clearBad(){document.querySelectorAll('.bad').forEach(e=>e.classList.remove('bad'));document.querySelectorAll('.errmsg').forEach(e=>e.remove())}
 function bad(id,msg){clearBad();const el=$(id);if(!el)return toast(msg);const box=el.closest('.field')||el.closest('label')||el;box.classList.add('bad');const m=document.createElement('div');m.className='errmsg';m.textContent=msg;if(box.tagName==='LABEL')box.insertAdjacentElement('afterend',m);else box.appendChild(m);box.scrollIntoView({behavior:'smooth',block:'center'});if(el.focus&&el.tagName!=='DIV')try{el.focus({preventScroll:true})}catch(e){}}
 document.addEventListener('input',clearBad);document.addEventListener('change',clearBad);
+
+function showDelete(){if(mp?.is_admin)return toast('Admin account cannot be deleted here');
+ const o=document.createElement('div');o.className='rv';
+ o.innerHTML=`<div class="rvp"><h2 style="margin:0 0 8px">Delete your account?</h2><p style="margin:0 0 10px">This cannot be undone. These will be deleted forever:</p><ul style="margin:0 0 14px;padding-left:18px;line-height:1.7;font-size:14px"><li>Your profile, photos, selfie and voice</li><li>Your chats, interests and matches</li><li>Your plans and join requests</li><li>Your login (email and password)</li></ul><div class="field"><label>Type DELETE to confirm</label><input id="delc" autocomplete="off" autocapitalize="characters"></div><button id="delgo" class="btn primary" style="width:100%;background:#ff6b6b;color:#fff">Delete forever</button><button id="delno" class="btn secondary" style="width:100%;margin-top:10px">Cancel</button></div>`;
+ document.body.append(o);$('delno').onclick=()=>o.remove();o.onclick=e=>{if(e.target===o)o.remove()};$('delgo').onclick=()=>delAccount(o)}
+async function delAccount(o){
+ if($('delc').value.trim()!=='DELETE')return bad('delc','Type DELETE to confirm');
+ const b=$('delgo');b.disabled=true;b.textContent='Deleting...';
+ try{
+  try{const rm=async(bk,ps)=>{if(ps.length)await sb.storage.from(bk).remove(ps)};
+   for(const bk of['avatars','verify']){const{data}=await sb.storage.from(bk).list(me.id,{limit:100});await rm(bk,(data||[]).map(f=>me.id+'/'+f.name))}
+   const[{data:m1},{data:m2}]=await Promise.all([sb.from('messages').select('media_path').eq('from_id',me.id).not('media_path','is',null),sb.from('plan_messages').select('media_path').eq('user_id',me.id).not('media_path','is',null)]);
+   await rm('chat-media',[...(m1||[]),...(m2||[])].map(x=>x.media_path))}catch(e){console.warn('storage cleanup',e)}
+  const{error}=await sb.rpc('delete_my_account');if(error)throw error;
+  landing=true;o.remove();await sb.auth.signOut();toast('Account deleted')
+ }catch(e){b.disabled=false;b.textContent='Delete forever';toast(e.message||'Could not delete')}}
 function newplan(){planForm(null)}
 async function editPlan(id){const{data:p}=await sb.from('plans').select('*').eq('id',id).maybeSingle();if(!p)return toast('Plan not found');const{data:c}=await sb.from('plan_contacts').select('link').eq('plan_id',id).maybeSingle();planForm(p,c?.link)}
 function planForm(p,link){
