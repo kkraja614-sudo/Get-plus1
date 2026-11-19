@@ -87,9 +87,9 @@ function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');
 function go(p){page=p;content.scrollTop=0;render()}
 
 let SEENT=null;
-function touchSeen(){if(me&&document.visibilityState==='visible'&&mp&&mp.show_seen!==false)sb.rpc('touch_seen')}
-function startSeen(){clearInterval(SEENT);if(!me)return;touchSeen();SEENT=setInterval(touchSeen,120000)}
-document.addEventListener('visibilitychange',touchSeen);
+function touchSeen(){if(me&&document.visibilityState==='visible'&&mp&&mp.show_seen!==false)sb.rpc('touch_seen').then(({error})=>{if(error)console.warn('touch_seen',error.message)})}
+function startSeen(){clearInterval(SEENT);if(!me)return;touchSeen();SEENT=setInterval(touchSeen,90000)}
+document.addEventListener('visibilitychange',touchSeen);window.addEventListener('focus',touchSeen);window.addEventListener('pageshow',touchSeen);
 function seenTxt(t){if(!t)return'';const s=(Date.now()-new Date(t))/1000;if(s<180)return'<span style="color:#22c55e;font-weight:600">● Online</span>';if(s<3600)return'Last seen '+Math.floor(s/60)+'m ago';if(s<86400)return'Last seen '+Math.floor(s/3600)+'h ago';if(s<604800)return'Last seen '+Math.floor(s/86400)+'d ago';return''}
 function seenPanel(p){if(p.gender!=='Female')return'';return`<div class="panel"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" ${p.show_seen===false?'':'checked'} onchange="setShowSeen(this.checked)"><span><strong>Show my online status</strong><br><small>Others see Online / Last seen. Turn off to hide it.</small></span></label></div>`}
 async function setShowSeen(v){const{error}=await sb.rpc('set_show_seen',{v});if(error)return toast(error.message);mp.show_seen=v;toast(v?'Online status visible':'Online status hidden')}
