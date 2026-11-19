@@ -101,6 +101,7 @@ async function setUser(u){
  if(chan){sb.removeChannel(chan);chan=null}
  if(me){
   const{data}=await sb.from('profiles').select('*').eq('id',me.id).maybeSingle();mp=data;
+  if(mp&&!mp.meet_pref_set&&me.user_metadata?.meet_pref){const pf=me.user_metadata.meet_pref,{error}=await sb.rpc('set_meet_pref',{v:pf});if(!error){mp.meet_pref=pf;mp.meet_pref_set=true}}
   chan=sb.channel('msgs').on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},()=>loadMsgs().then(updateBadge)).on('postgres_changes',{event:'*',schema:'public',table:'interests'},()=>{updateBadge();if(page==='matches')render()}).subscribe();
  }
  setAv();startSeen();$('adminTab').classList.toggle('hidden',!mp?.is_admin);$('nav').classList.toggle('hidden',!me);
@@ -126,14 +127,16 @@ function togglePw2(i,b){const e=$(i),h=e.type==='password';e.type=h?'text':'pass
 async function saveNewPw(){const a=$('np1').value,b=$('np2').value;if(a.length<6)return toast('Minimum 6 characters');if(a!==b)return toast('Passwords do not match');
  const{error}=await sb.auth.updateUser({password:a});if(error)return toast(error.message);
  RECOV=false;history.replaceState(null,'',location.pathname);toast('Password updated');go('discover')}
+function sgmRender(){const b=$('sgm');if(!b)return;const f=$('ag').value==='Female',opts=f?MPOPT_F:MPOPT_M,cur=document.querySelector('input[name=sgp]:checked')?.value;b.innerHTML=opts.map(o=>`<label class="panel" style="display:flex;gap:10px;align-items:flex-start;margin:0 0 8px;cursor:pointer"><input type="radio" name="sgp" value="${o[0]}" ${cur===o[0]?'checked':''} style="margin-top:3px"><span><strong>${o[1]}</strong><br><small>${o[2]}</small></span></label>`).join('')}
 function auth(){
  if(landing)return landingPage();
  const up=authMode==='up';
  content.innerHTML=`<div class="eyebrow">WELCOME</div><h1>Find someone to<br>make plans with.</h1><p>${up?'Create your account. 18+ only.':'Log in to continue.'}</p>
- ${up?`<div class="field"><label>Display name</label><input id="an"></div><div class="grid2"><div class="field"><label>Age (18+)</label><input id="aa" type="number"></div><div class="field"><label>City</label><select id="ac">${CITIES.map(c=>`<option>${c}</option>`).join('')}</select></div></div><div class="grid2"><div class="field"><label>I am</label><select id="ag"><option>Male</option><option>Female</option><option>Other</option></select></div><div class="field"><label>Interested in</label><select id="ai"><option>Everyone</option><option>Women</option><option>Men</option></select></div></div><div class="field"><label>Mobile number (private)</label><input id="ao" type="tel" inputmode="numeric"></div>`:''}
+ ${up?`<div class="field"><label>Display name</label><input id="an"></div><div class="grid2"><div class="field"><label>Age (18+)</label><input id="aa" type="number"></div><div class="field"><label>City</label><select id="ac">${CITIES.map(c=>`<option>${c}</option>`).join('')}</select></div></div><div class="grid2"><div class="field"><label>I am</label><select id="ag" onchange="sgmRender()"><option>Male</option><option>Female</option><option>Other</option></select></div><div class="field"><label>Interested in</label><select id="ai"><option>Everyone</option><option>Women</option><option>Men</option></select></div></div><div class="field"><label>Mobile number (private)</label><input id="ao" type="tel" inputmode="numeric"></div><div class="field" id="fsm"><label>Which meets are you open to?</label><div id="sgm"></div></div>`:''}
  <div class="field"><label>${up?'Email (use this to log in)':'Email (the one you signed up with)'}</label><input id="ae" type="email" autocomplete="username"></div><div class="field"><label>Password</label><div class="pwrow"><input id="ap" type="password" autocomplete="${up?'new-password':'current-password'}"><button type="button" class="eye" id="eyeb" onclick="togglePw()" aria-label="Show password">${EYE}</button></div></div>
- ${up?`<label style="display:flex;gap:8px;font-size:12px;margin:12px 0;align-items:flex-start"><input type="checkbox" id="ag2" style="margin-top:2px"><span>I'm 18+ and agree to the <a href="#" onclick="showTerms();return false" style="color:var(--pink)">Terms &amp; Safety rules</a></span></label>`:''}<button class="btn primary" style="width:100%" onclick="doAuth()">${up?'Create account':'Log in'}</button>
+ ${up?`<label class="panel" style="display:flex;gap:10px;align-items:flex-start;margin:12px 0 0;cursor:pointer"><input type="checkbox" id="afr" style="width:20px;height:20px;margin:0"><span><strong>Friendly meet only.</strong> No physical intimacy. Public places only.</span></label><label style="display:flex;gap:8px;font-size:12px;margin:12px 0;align-items:flex-start"><input type="checkbox" id="ag2" style="margin-top:2px"><span>I'm 18+ and agree to the <a href="#" onclick="showTerms();return false" style="color:var(--pink)">Terms &amp; Safety rules</a></span></label>`:''}<button class="btn primary" style="width:100%" onclick="doAuth()">${up?'Create account':'Log in'}</button>
  ${up?'':'<p style="text-align:center;margin:12px 0 0"><button class="small-link" onclick="forgotPw()">Forgot password?</button></p>'}<p style="text-align:center"><button class="small-link" onclick="authMode='${up?'in':'up'}';auth()">${up?'Have an account? Log in':'New here? Sign up'}</button></p>`;
+ if(up)sgmRender();
 }
 function landingPage(){
  const g=m=>`landing=false;authMode='${m}';auth()`;
@@ -154,8 +157,15 @@ async function doAuth(){
  const e=$('ae').value.trim(),p=$('ap').value;let r;
  if(authMode==='up'){
   const age=+$('aa').value,name=$('an').value.trim();
-  const ph=$('ao').value.trim();if(!name||!(age>=18))return toast('Name and age 18+ required');if(!/^\d{10}$/.test(ph))return toast('Enter 10 digit mobile');if(!$('ag2').checked)return toast('Please accept the Terms & Safety rules');
-  r=await sb.auth.signUp({email:e,password:p,options:{data:{name,age,city:$('ac').value,gender:$('ag').value,interested_in:$('ai').value,phone:ph}}});
+  const ph=$('ao').value.trim();
+  if(!name)return bad('an','Enter your display name');
+  if(!(age>=18))return bad('aa','Age must be 18 or above');
+  if(!/^\d{10}$/.test(ph))return bad('ao','Enter a 10 digit mobile number');
+  const pf=document.querySelector('input[name=sgp]:checked')?.value;
+  if(!pf)return bad('fsm','Choose the kind of meets you are open to');
+  if(!$('afr').checked)return bad('afr','Please accept the friendly meet rule');
+  if(!$('ag2').checked)return bad('ag2','Please accept the Terms & Safety rules');
+  r=await sb.auth.signUp({email:e,password:p,options:{data:{name,age,city:$('ac').value,gender:$('ag').value,interested_in:$('ai').value,phone:ph,meet_pref:pf,friendly_ok:true}}});
   if(!r.error&&!r.data.session)return toast('Check your email to confirm, then log in with it');if(!r.error)toast('Account created. Use this email to log in next time');
  }else r=await sb.auth.signInWithPassword({email:e,password:p});
  if(r.error)toast(r.error.message);
@@ -351,15 +361,15 @@ async function plans(){
  if(!/GROUP PLANS/.test(content.textContent))content.innerHTML='<div class="panel" style="margin-top:15px">Loading plans...</div>';
  const[,{data:pl},{data:jn},{data:pc},{data:pm},{data:pr},{data:po}]=await Promise.all([loadBL(),sb.from('plans').select('*').order('created_at',{ascending:false}),sb.from('plan_joins').select('*'),sb.from('plan_contacts').select('*'),sb.from('plan_messages').select('plan_id,user_id,created_at').order('created_at',{ascending:false}).limit(500),sb.from('plan_reads').select('plan_id,last_read').eq('user_id',me.id),sb.from('plan_offers').select('plan_id,user_id,amount')]);const OF=Object.fromEntries((po||[]).map(o=>[o.plan_id+':'+o.user_id,o.amount]));const LR=Object.fromEntries((pr||[]).map(r=>[r.plan_id,new Date(r.last_read)])),UN={};(pm||[]).forEach(m=>{if(m.user_id!==me.id&&(!LR[m.plan_id]||new Date(m.created_at)>LR[m.plan_id]))UN[m.plan_id]=(UN[m.plan_id]||0)+1});
  const ids=[...new Set((pl||[]).map(x=>x.host_id).concat((jn||[]).map(x=>x.user_id)))];
- const{data:ps}=ids.length?await sb.from('profiles').select('id,name,age,city,gender,last_seen,bio,looking_for,avatar_url,verified,suspended').in('id',ids):{data:[]};
+ const{data:ps}=ids.length?await sb.from('profiles').select('id,name,age,city,gender,last_seen,bio,looking_for,meet_pref,avatar_url,verified,suspended').in('id',ids):{data:[]};
  const P=HP=Object.fromEntries((ps||[]).map(x=>[x.id,x])),L=Object.fromEntries((pc||[]).map(c=>[c.plan_id,c.link])),mine=Object.fromEntries((jn||[]).filter(j=>j.user_id===me.id).map(j=>[j.plan_id,j.status]));
  if(mp?.gender==='Female'&&!mp.meet_pref_set){content.innerHTML='<div class="eyebrow">GROUP PLANS</div><h1>One quick choice</h1><p>Choose your meet preference to see and create plans.</p>'+meetPanel(mp);return}
- const sm='style="flex:0;padding:9px 12px;white-space:nowrap"',pref=mp?.meet_pref||'casual',canOffer=x=>x.min_offer&&x.meet_type!=='casual'&&pref!=='casual'&&mp?.gender==='Male';
- const shown=(pl||[]).filter(x=>!BL.has(x.host_id)&&vis(x)&&(x.host_id===me.id||x.meet_type==='both'||pref==='both'||x.meet_type===pref)&&!P[x.host_id]?.suspended&&(planKind==='All'||x.kind===planKind)).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+ const sm='style="flex:0;padding:9px 12px;white-space:nowrap"',pref=mp?.meet_pref||'casual',hp=x=>P[x.host_id]?.meet_pref||'casual',canOffer=x=>x.min_offer&&hp(x)!=='casual'&&pref!=='casual'&&mp?.gender==='Male';
+ const shown=(pl||[]).filter(x=>!BL.has(x.host_id)&&vis(x)&&(x.host_id===me.id||hp(x)==='both'||pref==='both'||hp(x)===pref)&&!P[x.host_id]?.suspended&&(planKind==='All'||x.kind===planKind)).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
  content.innerHTML=`<div class="eyebrow">GROUP PLANS</div><h1>Plans near you</h1><p>Meet in a group, it feels safer. Join once the host approves your request.</p><button class="btn primary" style="width:100%" onclick="go('newplan')">+ Create a plan</button>
  <div class="filters" style="margin-top:6px">${['All','Movie','Cafe','Travel','Dinner','Outing'].map(k=>`<button class="chip ${planKind===k?'active':''}" onclick="planKind='${k}';render()">${k==='All'?'All plans':k+' plans'}</button>`).join('')}</div>
  ${shown.map(x=>{const host=x.host_id===me.id,st=mine[x.id],reqs=(jn||[]).filter(j=>j.plan_id===x.id&&j.user_id!==me.id);
- return `<article class="card" style="margin-top:15px"><div class="card-body"><div class="name-line"><span class="name">${esc(x.title)}</span><span style="display:flex;gap:6px;align-items:center">${Date.now()-new Date(x.created_at)<864e5?'<span class="pill" style="background:#1d3a33;color:#4fd1a5">New</span>':''}<span class="pill">${esc(x.kind)}</span>${host?`<button class="small-link" aria-label="Edit plan" style="font-size:18px;padding:6px 8px" onclick="editPlan('${x.id}')">✎</button>`:''}</span></div><div class="meta">⌖ ${esc(x.city)} · ${esc(x.when_text)} · ${esc(x.place)}</div><div class="meta" style="margin-top:-6px">Posted ${ago(x.created_at)}${x.audience&&x.audience!=='Everyone'?' · For '+(x.audience==='Men'?'men':'women')+' only':''}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px"><span class="pill">${MTL[x.meet_type]||'Casual meet'}</span><span class="pill">${EXL[x.expense]||'Shared expense'}</span></div><p>${esc(x.note)}</p><div class="meta">Host: <span class="round" style="width:26px;height:26px;border-radius:50%;display:inline-flex;vertical-align:middle;margin:0 6px 0 2px;overflow:hidden;font-size:12px">${avMini(P[x.host_id]?.avatar_url)}</span><a href="#" onclick="event.preventDefault();hostSheet('${x.host_id}')" style="color:var(--pink);text-decoration:underline;font-weight:700">${esc(P[x.host_id]?.name)}</a>${P[x.host_id]?.age?', '+esc(P[x.host_id].age):''}${P[x.host_id]?.verified?' ✓':''}${P[x.host_id]?.city?' · '+esc(P[x.host_id].city):''} · ${x.seats} people${P[x.host_id]?.gender==='Female'&&seenTxt(P[x.host_id].last_seen)?`<br>${seenTxt(P[x.host_id].last_seen)}`:''}</div>
+ return `<article class="card" style="margin-top:15px"><div class="card-body"><div class="name-line"><span class="name">${esc(x.title)}</span><span style="display:flex;gap:6px;align-items:center">${Date.now()-new Date(x.created_at)<864e5?'<span class="pill" style="background:#1d3a33;color:#4fd1a5">New</span>':''}<span class="pill">${esc(x.kind)}</span>${host?`<button class="small-link" aria-label="Edit plan" style="font-size:18px;padding:6px 8px" onclick="editPlan('${x.id}')">✎</button>`:''}</span></div><div class="meta">⌖ ${esc(x.city)} · ${esc(x.when_text)} · ${esc(x.place)}</div><div class="meta" style="margin-top:-6px">Posted ${ago(x.created_at)}${x.audience&&x.audience!=='Everyone'?' · For '+(x.audience==='Men'?'men':'women')+' only':''}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px"><span class="pill">${EXL[x.expense]||'Shared expense'}</span></div><p>${esc(x.note)}</p><div class="meta">Host: <span class="round" style="width:26px;height:26px;border-radius:50%;display:inline-flex;vertical-align:middle;margin:0 6px 0 2px;overflow:hidden;font-size:12px">${avMini(P[x.host_id]?.avatar_url)}</span><a href="#" onclick="event.preventDefault();hostSheet('${x.host_id}')" style="color:var(--pink);text-decoration:underline;font-weight:700">${esc(P[x.host_id]?.name)}</a>${P[x.host_id]?.age?', '+esc(P[x.host_id].age):''}${P[x.host_id]?.verified?' ✓':''}${P[x.host_id]?.city?' · '+esc(P[x.host_id].city):''} · ${x.seats} people${P[x.host_id]?.gender==='Female'&&seenTxt(P[x.host_id].last_seen)?`<br>${seenTxt(P[x.host_id].last_seen)}`:''}</div>
  ${st==='accepted'||(host&&(jn||[]).some(j=>j.plan_id===x.id&&j.status==='accepted'))?`<button class="btn primary" style="width:100%;margin-bottom:8px" onclick="openPlanChat('${x.id}')">Open group chat${UN[x.id]?` (${UN[x.id]} new)`:''}</button>`:host?`<button class="btn secondary" style="width:100%;margin-bottom:8px;opacity:.85" onclick="noChatYet()">Open group chat</button>`:''}
  ${L[x.id]&&/^https?:\/\//.test(L[x.id])?`<a class="btn secondary" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px" href="${esc(L[x.id])}" target="_blank" rel="noopener">Open WhatsApp group</a>`:''}
  ${host&&x.min_offer?'<p style="font-size:12px">Offers are private. The highest offer is not auto-picked, you choose.</p>':''}
@@ -377,7 +387,7 @@ const MPOPT_M=[['paid','Interested in paid meet','You pay for the female compani
 const MTOPT_F=[['paid','Paid meet','Boys can offer an amount for my time. Not for physical intimacy.'],['casual','Casual meet','No payment. No physical intimacy.'],['both','Casual or paid, both okay','No physical intimacy.']];
 const MPOPT_F=[['paid',"I'm interested in paid meet",'Boys can offer an amount for my time. Not for physical intimacy.'],['casual','Just casual meet',"No need to pay. Boys can't make offers. No physical intimacy."]];
 function mtChange(){const m=document.querySelector('input[name=mt]:checked')?.value,w=$('nmw');if(w)w.style.display=m&&m!=='casual'?'':'none'}
-function meetPanel(p){const f=p.gender==='Female',v=p.meet_pref||'casual',need=f&&!p.meet_pref_set,opts=f?MPOPT_F:MPOPT_M;return`<div class="panel"${need?' style="border-color:#ff7ab8"':''}><strong>${f?'Choose your meet preference':'Which meets do you want to see?'}${need?' (required)':''}</strong><p style="margin:6px 0 10px;font-size:13px">${f?'Pick one. You only see plans that match.':'You only see matching plans. Casual is the default.'}</p>${opts.map(o=>`<label style="display:flex;gap:10px;align-items:flex-start;margin:8px 0;cursor:pointer"><input type="radio" name="mpref" value="${o[0]}" ${(!need&&v===o[0])?'checked':''} onchange="setMeetPref(this.value)" style="margin-top:3px"><span><strong>${o[1]}</strong><br><small>${o[2]}</small></span></label>`).join('')}</div>`}
+function meetPanel(p){const f=p.gender==='Female',v=p.meet_pref||'casual',need=f&&!p.meet_pref_set,opts=f?MPOPT_F:MPOPT_M;return`<div class="panel"${need?' style="border-color:#ff7ab8"':''}><strong>${f?'Choose your meet preference':'Which meets do you want to see?'}${need?' (required)':''}</strong><p style="margin:6px 0 10px;font-size:13px">${f?'Pick one. You only see plans that match.':'You only see matching plans. Casual is the default.'}</p>${opts.map(o=>`<label style="display:flex;gap:10px;align-items:flex-start;margin:8px 0;cursor:pointer"><input type="radio" name="mpref" value="${o[0]}" ${(!need&&v===o[0])?'checked':''} onchange="setMeetPref(this.value)" style="margin-top:3px"><span><strong>${o[1]}</strong><br><small>${o[2]}</small></span></label>`).join('')}<p style="margin:10px 0 0;font-size:12px">You can change this anytime. Friendly meet only. No physical intimacy. Public places only.</p></div>`}
 async function setMeetPref(v){const{error}=await sb.rpc('set_meet_pref',{v});if(error)return toast(error.message);mp.meet_pref=v;mp.meet_pref_set=true;toast('Saved');if(page==='plans')render()}
 
 function clearBad(){document.querySelectorAll('.bad').forEach(e=>e.classList.remove('bad'));document.querySelectorAll('.errmsg').forEach(e=>e.remove())}
@@ -391,29 +401,26 @@ function planForm(p,link){
  <div class="field"><label>Title</label><input id="nt" value="${esc(v.title)}" placeholder="Sunday cafe meetup"></div>
  <div class="grid2"><div class="field"><label>Type</label><select id="nk">${KINDS.map(c=>`<option ${c===v.kind?'selected':''}>${c}</option>`).join('')}</select></div><div class="field"><label>City</label><select id="nc">${CITIES.map(c=>`<option ${c===v.city?'selected':''}>${c}</option>`).join('')}</select></div></div>
  <div class="field"><label>Expenses (who pays for tickets, food, travel)</label><select id="nx"><option value="">Choose...</option>${[['sponsor','I will sponsor'],['shared','Shared expense'],['you_pay','You pay']].map(c=>`<option value="${c[0]}" ${p&&c[0]===v.expense?'selected':''}>${c[1]}</option>`).join('')}</select></div>
- <div class="field" id="fmt" style="margin-bottom:0"><label>Type of meet</label></div><div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">${opts.map(o=>`<label class="panel" style="display:flex;gap:10px;align-items:flex-start;margin:0;cursor:pointer"><input type="radio" name="mt" value="${o[0]}" ${(p&&v.meet_type===o[0])||opts.length===1?'checked':''} onchange="mtChange()" style="margin-top:3px"><span><strong>${o[1]}</strong><br><small>${o[2]}</small></span></label>`).join('')}</div>
+ 
  <div class="field"><label>Who can see this plan</label><select id="na">${[['Everyone','Everyone'],['Men','Men only'],['Women','Women only']].map(c=>`<option value="${c[0]}" ${c[0]===(v.audience||'Everyone')?'selected':''}>${c[1]}</option>`).join('')}</select></div>
  <div class="field"><label>When</label><input id="nw" value="${esc(v.when_text)}" placeholder="Sun 16 Nov, 5 PM"></div>
  <div class="field"><label>Place (public places only)</label><input id="np" value="${esc(v.place)}"></div>
  <div class="field"><label>Total people</label><input id="ns" type="number" value="${v.seats||4}"></div>
- ${fem?`<div class="field" id="nmw" style="${v.meet_type&&v.meet_type!=='casual'?'':'display:none'}"><label>Minimum offer ₹ (optional, lets people make offers)</label><input id="nm" type="number" inputmode="numeric" value="${v.min_offer||''}"></div>`:''}
+ ${fem&&pref==='paid'?`<div class="field" id="nmw"><label>Minimum offer ₹ (optional, lets people make offers)</label><input id="nm" type="number" inputmode="numeric" value="${v.min_offer||''}"></div>`:''}
  <div class="field"><label>Details</label><textarea id="nn" rows="3">${esc(v.note)}</textarea></div>
  <div class="field"><label>WhatsApp group link (optional, visible only to accepted members)</label><input id="nl" value="${esc(link)}"></div>
- <label class="panel" style="display:flex;gap:10px;align-items:flex-start;margin:0 0 14px;cursor:pointer"><input type="checkbox" id="nr" ${p?'checked':''} style="width:20px;height:20px;margin:0"><span><strong>Friendly meet only.</strong> No physical intimacy. Public places only.</span></label>
+ 
  <button class="btn primary" style="width:100%" onclick="savePlan()">${p?'Save changes':'Post plan'}</button>`;
 }
 async function savePlan(){
  const mo=$('nm');
  const v={title:$('nt').value.trim(),kind:$('nk').value,city:$('nc').value,audience:$('na').value,when_text:$('nw').value.trim(),place:$('np').value.trim(),seats:Math.min(20,Math.max(2,+$('ns').value||4)),note:$('nn').value.trim().slice(0,500)};
  if(mo)v.min_offer=+mo.value>=100?+mo.value:null;
- const mt=document.querySelector('input[name=mt]:checked')?.value;
  if(!v.title)return bad('nt','Enter a title');
  if(!$('nx').value)return bad('nx','Choose who pays the expenses');
- if(!mt)return bad('fmt','Choose the type of meet');
  if(!v.when_text)return bad('nw','Enter when');
  if(!v.place)return bad('np','Enter the place');
- if(!$('nr').checked)return bad('nr','Please accept the friendly meet rule');
- v.expense=$('nx').value;v.meet_type=mt;v.rules_ok=true;if(mt==='casual')v.min_offer=null;
+ v.expense=$('nx').value;v.meet_type=mp?.meet_pref||'casual';v.rules_ok=true;if(v.meet_type==='casual')v.min_offer=null;
  const l=$('nl').value.trim();let id=editId;
  if(id){const{error}=await sb.from('plans').update(v).eq('id',id);if(error)return toast(error.message);await sb.from('plan_contacts').delete().eq('plan_id',id)}
  else{v.host_id=me.id;const{data,error}=await sb.from('plans').insert(v).select().single();if(error)return toast(error.code==='42501'?'Profile not approved yet':error.message);id=data.id}
