@@ -76,7 +76,7 @@ try{sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)}catch(e){
  throw e}
 const $=id=>document.getElementById(id),content=$('content');
 const CITIES=['Madurai','Chennai','Coimbatore'],LOOK=['Movie companion','Cafe companion','Travel companion','Dinner companion','Open to all activities'];
-const FEE=99,UPI_ID='akmech1994-1@oksbi';/* <-- inga unga UPI ID podunga */
+const FEE=99,UPI_ID='get2plus1@okicici';/* <-- inga unga UPI ID podunga */
 const av=(u,f)=>u?`<img src="${esc(u)}">`:f;const avMini=u=>u?`<img src="${esc(u)}">`:'<div class="mini-ph"></div>';
 function setAv(){document.querySelector('.avatar').innerHTML=av(mp?.avatar_url,'P')}
 const G={Men:'Male',Women:'Female'},fit=(a,b)=>{const w=G[a.interested_in];return !w||!b.gender||b.gender===w};
