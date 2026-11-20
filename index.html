@@ -166,7 +166,7 @@ async function doAuth(){
   if(!$('afr').checked)return bad('afr','Please accept the friendly meet rule');
   if(!$('ag2').checked)return bad('ag2','Please accept the Terms & Safety rules');
   r=await sb.auth.signUp({email:e,password:p,options:{data:{name,age,city:$('ac').value,gender:$('ag').value,interested_in:$('ai').value,phone:ph,meet_pref:pf,friendly_ok:true}}});
-  if(!r.error&&!r.data.session)return toast('Check your email to confirm, then log in with it');if(!r.error)toast('Account created. Use this email to log in next time');
+  if(!r.error&&!r.data.session)return toast('Check your email (and Spam folder) to confirm, then log in');if(!r.error)toast('Account created. Use this email to log in next time');
  }else r=await sb.auth.signInWithPassword({email:e,password:p});
  if(r.error)toast(r.error.message);
 }
