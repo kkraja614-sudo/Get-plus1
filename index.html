@@ -118,13 +118,8 @@ function setIS(ids){try{const s=getIS();ids.forEach(i=>s.add(i));localStorage.se
 function introNote(n=0){const b=$('introLink');if(!b){if(n<10)setTimeout(()=>introNote(n+1),500);return}if(mp?.gender!=='Female')return;
  sb.from('intro_requests').select('id').eq('girl_id',me.id).in('status',['sent','accepted']).then(({data})=>{const sn=getIS(),c=(data||[]).filter(r=>!sn.has(r.id)).length;if(c)b.innerHTML=`Private chats <span class="pill" style="background:#ff7ab8;color:#2a0f1d;margin-left:4px">${c} new</span> →`})}
 
-function applyWM(){let w=$('wm');if(!me||!mp){if(w)w.remove();return}
- if(!w){w=document.createElement('div');w.id='wm';document.body.append(w)}
- const t=(mp.name||'Plus1')+' · '+me.id.slice(0,6),svg=`<svg xmlns="http://www.w3.org/2000/svg" width="260" height="180"><text x="20" y="110" transform="rotate(-24 130 90)" fill="white" fill-opacity="0.08" font-size="15" font-family="Arial">${esc(t)}</text></svg>`;
- w.style.cssText='position:fixed;inset:0;z-index:60;pointer-events:none;background-image:url("data:image/svg+xml,'+encodeURIComponent(svg)+'")'}
 document.addEventListener('visibilitychange',()=>{document.body.style.filter=document.hidden&&me?'blur(14px)':''});
 function render(){
- applyWM();
  if(RECOV&&me)return newPwScreen();
  if(page!=='planchat'&&pchan){sb.removeChannel(pchan);pchan=null}
  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
