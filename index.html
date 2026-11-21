@@ -107,7 +107,7 @@ async function setUser(u){
  if(me){
   const{data}=await sb.from('profiles').select('*').eq('id',me.id).maybeSingle();mp=data;
   if(mp&&!mp.meet_pref_set&&me.user_metadata?.meet_pref){const pf=me.user_metadata.meet_pref,{error}=await sb.rpc('set_meet_pref',{v:pf});if(!error){mp.meet_pref=pf;mp.meet_pref_set=true}}
-  chan=sb.channel('msgs').on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},()=>loadMsgs().then(updateBadge)).on('postgres_changes',{event:'*',schema:'public',table:'interests'},()=>{updateBadge();if(page==='matches')render()}).subscribe();
+  chan=sb.channel('msgs').on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},pl=>{loadMsgs().then(updateBadge);newMsgToast(pl)}).on('postgres_changes',{event:'*',schema:'public',table:'interests'},()=>{updateBadge();if(page==='matches')render()}).subscribe();
  }
  setAv();startSeen();$('adminTab').classList.toggle('hidden',!mp?.is_admin);$('nav').classList.toggle('hidden',!me);
  if(!me)page='discover';render();
@@ -190,7 +190,10 @@ async function doAuth(){
 }
 const seenKey=()=>'seen_'+me.id,keysOf=(m,r)=>[...m.map(i=>'m:'+i),...r.map(i=>'r:'+i)];
 function getSeen(){try{return new Set(JSON.parse(localStorage.getItem(seenKey())||'[]'))}catch(e){return new Set()}}
-function showBadge(n){const el=$('mBadge');el.textContent=n>9?'9+':n;el.classList.toggle('hidden',!n)}
+
+function newMsgToast(pl){const m=pl&&pl.new;if(!m||!me||m.to_id!==me.id||BL.has(m.from_id))return;if(page==='chat'&&chatWith===m.from_id)return;
+ sb.from('profiles').select('name').eq('id',m.from_id).maybeSingle().then(({data})=>toast('New message from '+(data?.name||'someone')));if(page==='matches')render()}
+function showBadge(n){document.title=(n?'('+(n>9?'9+':n)+') ':'')+'Plus1';const el=$('mBadge');el.textContent=n>9?'9+':n;el.classList.toggle('hidden',!n)}
 function storeSeen(m,r){try{const s=getSeen();keysOf(m,r).forEach(k=>s.add(k));localStorage.setItem(seenKey(),JSON.stringify([...s]))}catch(e){}}
 function markSeen(m,r){storeSeen(m,r);updateBadge()}
 function getRead(){try{return JSON.parse(localStorage.getItem('read_'+me.id)||'{}')}catch(e){return{}}}
@@ -253,7 +256,14 @@ async function matches(){
  const myPay={};if(mp?.gender==='Male'){const{data:py}=await sb.from('payments').select('other_id,status').eq('payer_id',me.id);(py||[]).forEach(y=>myPay[y.other_id]=y.status)}
  const can={};await Promise.all(mut.map(async i=>{const{data}=await sb.rpc('can_chat',{a:me.id,b:i});can[i]=data===true}));
  const mb=i=>can[i]?b('Chat','openChat',i):mp?.gender==='Male'?(myPay[i]==='pending'?'<span class="pill">Verifying payment</span>':b('Intro ₹'+IFEE,'openIntro',i)):'<span class="pill">Waiting for him</span>';
+ const{data:irq}=await sb.from('intro_requests').select('payer_id,girl_id').in('status',['sent','accepted']);
+ const pcs=[...new Set((irq||[]).filter(r=>r.payer_id===me.id||r.girl_id===me.id).map(r=>r.payer_id===me.id?r.girl_id:r.payer_id).filter(i=>!BL.has(i)))];
+ const[{data:pcp},{data:pcm}]=pcs.length?await Promise.all([sb.from('profiles').select('id,name,age,city,avatar_url,verified').in('id',pcs),sb.from('messages').select('from_id,to_id,body,created_at').or(`from_id.eq.${me.id},to_id.eq.${me.id}`).order('created_at',{ascending:false}).limit(300)]):[{data:[]},{data:[]}];
+ const PP=Object.fromEntries((pcp||[]).map(q=>[q.id,q])),rdm=getRead(),lastM={},unM={};(pcm||[]).forEach(m=>{const o=m.from_id===me.id?m.to_id:m.from_id;if(!lastM[o])lastM[o]=m;if(m.to_id===me.id&&m.created_at>(rdm[o]||''))unM[o]=(unM[o]||0)+1});
+ pcs.sort((a,b)=>(lastM[b]?.created_at||'').localeCompare(lastM[a]?.created_at||''));
+ const unTot=pcs.reduce((s,i)=>s+(unM[i]||0),0),prow=i=>{const q=PP[i];if(!q)return'';const l=lastM[i],un=unM[i]||0;return`<div class="match-row" style="cursor:pointer" onclick="openChat('${i}')"><div class="round">${av(q.avatar_url,'♡')}</div><div class="rowcopy"><strong>${esc(q.name)}${q.verified?' ✓':''}</strong><span>${l?esc(((l.from_id===me.id?'You: ':'')+l.body).slice(0,60)):'No messages yet. Say hi'}</span></div>${un?`<span class="pill" style="background:#ff7ab8;color:#2a0f1d">${un} new</span>`:'<span class="pill">Chat ›</span>'}</div>`};
  content.innerHTML=`<div class="eyebrow">YOUR CONNECTIONS</div><h1>Matches & interests</h1><button id="introLink" class="small-link" style="display:block;margin:-6px 0 10px" onclick="go('intros')">Private chats →</button>
+ <div class="section-head"><h2>Private chats</h2><span class="pill">${unTot?unTot+' new':pcs.length}</span></div>${pcs.map(prow).join('')||'<div class="panel">No private chats yet.</div>'}
  <div class="section-head"><h2>Matches</h2><span class="pill">${mut.length}</span></div>${mut.map(i=>row(i,mb(i))).join('')||'<div class="panel">No matches yet.</div>'}
  <div class="section-head"><h2>Received</h2><span class="pill">${rec.length} new</span></div>${rec.map(i=>row(i,b('Accept','sendInterest',i)+`<button class="btn secondary" style="flex:0;padding:9px 12px" onclick="declineInt('${i}')">✕</button>`)).join('')||'<div class="panel">Nothing new.</div>'}
  <div class="section-head"><h2>Sent</h2><span class="small-link">${pen.length}</span></div>${pen.map(i=>row(i,'<span class="pill">Pending</span>')).join('')||'<div class="panel">No pending interests.</div>'}`;
