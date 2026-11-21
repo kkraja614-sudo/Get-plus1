@@ -75,7 +75,7 @@ try{sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)}catch(e){
  document.getElementById('content').innerHTML='<div class="panel"><strong>Setup needed</strong><p style="margin:6px 0 0">index.html top-la <b>SUPABASE_URL</b> and <b>SUPABASE_KEY</b> nee un Supabase project values-ku maathanum. Apram phone-la file open pannama, Netlify/Vercel-la host panni link-la open pannu.</p><p style="margin:6px 0 0;font-size:11px">'+String(e.message).replace(/</g,'&lt;')+'</p></div>';
  throw e}
 const $=id=>document.getElementById(id),content=$('content');
-const CITIES=['Madurai','Chennai','Coimbatore'],LOOK=['Movie companion','Cafe companion','Travel companion','Dinner companion','Open to all activities'];
+const CITIES=['Madurai','Chennai','Coimbatore','Bangalore'],LOOK=['Movie companion','Cafe companion','Travel companion','Dinner companion','Open to all activities'];
 const FEE=99,UPI_ID='get2plus1@okicici';/* <-- inga unga UPI ID podunga */
 const av=(u,f)=>u?`<img src="${esc(u)}">`:f;const avMini=u=>u?`<img src="${esc(u)}">`:'<div class="mini-ph"></div>';
 function setAv(){document.querySelector('.avatar').innerHTML=av(mp?.avatar_url,'P')}
@@ -162,7 +162,7 @@ function landingPage(){
   <div class="panel" style="font-size:14px;line-height:1.6">Choose how expenses are split. Friendly meets only, in public places.</div>
  <div class="section-head"><h2>Built to feel safe</h2></div>
  <div class="panel"><div class="tags">${['Free for girls','You choose who contacts you','Selfie-verified badge','Block and report anytime','Phone number never shown'].map(t=>`<span class="tag">${t}</span>`).join('')}</div></div>
- <p style="text-align:center;font-size:11px">Madurai · Chennai · Coimbatore · 18+ only · <button class="small-link" style="font-size:11px" onclick="showTerms()">Terms &amp; Safety</button></p>`;
+ <p style="text-align:center;font-size:11px">Madurai · Chennai · Coimbatore · Bangalore · 18+ only · <button class="small-link" style="font-size:11px" onclick="showTerms()">Terms &amp; Safety</button></p>`;
 }
 const EYE='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',EYEOFF='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 function togglePw(){const i=$('ap'),h=i.type==='password';i.type=h?'text':'password';$('eyeb').innerHTML=h?EYEOFF:EYE;$('eyeb').setAttribute('aria-label',h?'Hide password':'Show password')}
