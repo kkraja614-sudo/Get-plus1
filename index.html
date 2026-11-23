@@ -6,6 +6,11 @@
 <title>Plus1 — Find your next companion</title>
 <link rel="manifest" href="manifest.json"><meta name="theme-color" content="#1c1426"><link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+window.OneSignalDeferred=window.OneSignalDeferred||[];
+OneSignalDeferred.push(async function(OneSignal){try{await OneSignal.init({appId:"58aaef7f-10c4-4cad-b74b-9abd21f58fd6",serviceWorkerPath:"sw.js",notifyButton:{enable:false}})}catch(e){}});
+</script>
 <style>
 :root{color-scheme:dark;--pink:#ff7ab8;--pink2:#ff9cc9;--ink:#f6eefc;--muted:#a99bb8;--bg:#241a30;--line:#3a2d4a;--soft:#3a2850;--green:#4fd1a5;--page:#1c1426;--card:#281d36;--on-pink:#2a0f1d}
 *{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
@@ -100,7 +105,21 @@ const payHow=v=>`<button class="btn primary" style="width:100%;margin-top:10px" 
 async function logout(){
  try{await Promise.race([sb.auth.signOut(),new Promise(r=>setTimeout(r,2500))])}catch(e){}
  try{Object.keys(localStorage).filter(k=>k.startsWith('sb-')&&k.endsWith('-auth-token')).forEach(k=>localStorage.removeItem(k))}catch(e){}
+ try{(window.OneSignalDeferred=window.OneSignalDeferred||[]).push(async function(OS){try{await OS.logout()}catch(e){}})}catch(e){}
  landing=true;await setUser(null)}
+function osSync(){
+ window.OneSignalDeferred=window.OneSignalDeferred||[];
+ OneSignalDeferred.push(async function(OS){
+  try{
+   if(!me||!mp)return;
+   await OS.login(me.id);
+   if(mp.gender==='Female'){
+    OS.User.addTags({gender:'female',city:mp.city||''});
+    if(!OS.Notifications.permission&&window.Notification&&Notification.permission==='default')await OS.Notifications.requestPermission();
+   }
+  }catch(e){}
+ });
+}
 async function setUser(u){
  me=u||null;mp=null;
  if(chan){sb.removeChannel(chan);chan=null}
@@ -109,7 +128,7 @@ async function setUser(u){
   if(mp&&!mp.meet_pref_set&&me.user_metadata?.meet_pref){const pf=me.user_metadata.meet_pref,{error}=await sb.rpc('set_meet_pref',{v:pf});if(!error){mp.meet_pref=pf;mp.meet_pref_set=true}}
   chan=sb.channel('msgs').on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},pl=>{loadMsgs().then(updateBadge);newMsgToast(pl)}).on('postgres_changes',{event:'*',schema:'public',table:'interests'},()=>{updateBadge();if(page==='matches')render()}).subscribe();
  }
- setAv();startSeen();$('adminTab').classList.toggle('hidden',!mp?.is_admin);$('nav').classList.toggle('hidden',!me);
+ osSync();setAv();startSeen();$('adminTab').classList.toggle('hidden',!mp?.is_admin);$('nav').classList.toggle('hidden',!me);
  if(!me)page='discover';render();
 }
 
