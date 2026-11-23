@@ -115,7 +115,8 @@ function osSync(){
    await OS.login(me.id);
    if(mp.gender==='Female'){
     OS.User.addTags({gender:'female',city:mp.city||''});
-    if(!OS.Notifications.permission&&window.Notification&&Notification.permission==='default')await OS.Notifications.requestPermission();
+    if(window.Notification&&Notification.permission==='default')await OS.Notifications.requestPermission();
+    else if(window.Notification&&Notification.permission==='granted'&&!OS.User.PushSubscription.optedIn)await OS.User.PushSubscription.optIn();
    }
   }catch(e){}
  });
