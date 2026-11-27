@@ -231,8 +231,9 @@ async function updateBadge(){
 }
 async function ints(){
  await loadBL();
- const{data}=await sb.from('interests').select('from_id,to_id').or(`from_id.eq.${me.id},to_id.eq.${me.id}`);const d=(data||[]).filter(i=>!BL.has(i.from_id===me.id?i.to_id:i.from_id));
- return{sent:new Set(d.filter(i=>i.from_id===me.id).map(i=>i.to_id)),got:new Set(d.filter(i=>i.to_id===me.id).map(i=>i.from_id))};
+ const{data}=await sb.from('interests').select('*').or(`from_id.eq.${me.id},to_id.eq.${me.id}`);const d=(data||[]).filter(i=>!BL.has(i.from_id===me.id?i.to_id:i.from_id));
+ const ts={s:{},g:{}};d.forEach(i=>{if(i.from_id===me.id)ts.s[i.to_id]=i.created_at||'';else ts.g[i.from_id]=i.created_at||''});
+ return{sent:new Set(d.filter(i=>i.from_id===me.id).map(i=>i.to_id)),got:new Set(d.filter(i=>i.to_id===me.id).map(i=>i.from_id)),ts};
 }
 async function loadBL(){
  const{data}=await sb.from('blocks').select('blocker_id,blocked_id').or(`blocker_id.eq.${me.id},blocked_id.eq.${me.id}`);
@@ -262,12 +263,15 @@ async function report(id){
  const{error}=await sb.from('reports').insert({reporter_id:me.id,reported_id:id,reason:r.slice(0,500)});
  toast(error?error.message:'Reported. Thank you');
 }
+let MT='matches';
+function showMT(t){MT=t;document.querySelectorAll('#mtTabs .chip').forEach(c=>c.classList.toggle('active',c.dataset.t===t));document.querySelectorAll('.mt').forEach(d=>d.classList.toggle('hidden',d.id!=='mt-'+t))}
 async function matches(){
- const{sent,got}=await ints(),ids=[...new Set([...sent,...got])];
+ const{sent,got,ts}=await ints(),ids=[...new Set([...sent,...got])];
  const{data:ps}=ids.length?await sb.from('profiles').select('id,name,age,city,avatar_url,verified').in('id',ids):{data:[]};
  const P=Object.fromEntries((ps||[]).map(p=>[p.id,p]));
  const row=(id,r)=>P[id]?`<div class="match-row"><div class="round">${av(P[id].avatar_url,'♡')}</div><div class="rowcopy"><strong>${esc(P[id].name)}${P[id].verified?' ✓':''}</strong><span>${P[id].age} · ${esc(P[id].city)}</span></div>${r}</div>`:'';
  const mut=[...sent].filter(i=>got.has(i)),rec=[...got].filter(i=>!sent.has(i)),pen=[...sent].filter(i=>!got.has(i));markSeen(mut,rec);
+ const tm=i=>{const x=ts.s[i]||'',y=ts.g[i]||'';return x>y?x:y};mut.sort((a,b)=>tm(b).localeCompare(tm(a)));rec.sort((a,b)=>(ts.g[b]||'').localeCompare(ts.g[a]||''));pen.sort((a,b)=>(ts.s[b]||'').localeCompare(ts.s[a]||''));
  const b=(t,f,id)=>`<button class="btn primary" style="flex:0;padding:9px 12px;white-space:nowrap" onclick="${f}('${id}')">${t}</button>`;
  const myPay={};if(mp?.gender==='Male'){const{data:py}=await sb.from('payments').select('other_id,status').eq('payer_id',me.id);(py||[]).forEach(y=>myPay[y.other_id]=y.status)}
  const can={};await Promise.all(mut.map(async i=>{const{data}=await sb.rpc('can_chat',{a:me.id,b:i});can[i]=data===true}));
@@ -279,10 +283,11 @@ async function matches(){
  pcs.sort((a,b)=>(lastM[b]?.created_at||'').localeCompare(lastM[a]?.created_at||''));
  const unTot=pcs.reduce((s,i)=>s+(unM[i]||0),0),prow=i=>{const q=PP[i];if(!q)return'';const l=lastM[i],un=unM[i]||0;return`<div class="match-row" style="cursor:pointer" onclick="openChat('${i}')"><div class="round">${av(q.avatar_url,'♡')}</div><div class="rowcopy"><strong>${esc(q.name)}${q.verified?' ✓':''}</strong><span>${l?esc(((l.from_id===me.id?'You: ':'')+l.body).slice(0,60)):'No messages yet. Say hi'}</span></div>${un?`<span class="pill" style="background:#ff7ab8;color:#2a0f1d">${un} new</span>`:'<span class="pill">Chat ›</span>'}</div>`};
  content.innerHTML=`<div class="eyebrow">YOUR CONNECTIONS</div><h1>Matches & interests</h1><button id="introLink" class="small-link" style="display:block;margin:-6px 0 10px" onclick="go('intros')">Private chats →</button>
- <div class="section-head"><h2>Private chats</h2><span class="pill">${unTot?unTot+' new':pcs.length}</span></div>${pcs.map(prow).join('')||'<div class="panel">No private chats yet.</div>'}
- <div class="section-head"><h2>Matches</h2><span class="pill">${mut.length}</span></div>${mut.map(i=>row(i,mb(i))).join('')||'<div class="panel">No matches yet.</div>'}
- <div class="section-head"><h2>Received</h2><span class="pill">${rec.length} new</span></div>${rec.map(i=>row(i,b('Accept','sendInterest',i)+`<button class="btn secondary" style="flex:0;padding:9px 12px" onclick="declineInt('${i}')">✕</button>`)).join('')||'<div class="panel">Nothing new.</div>'}
- <div class="section-head"><h2>Sent</h2><span class="small-link">${pen.length}</span></div>${pen.map(i=>row(i,'<span class="pill">Pending</span>')).join('')||'<div class="panel">No pending interests.</div>'}`;
+ <div class="filters" id="mtTabs"><button class="chip" data-t="chats" onclick="showMT('chats')">Chats ${unTot?unTot+' new':pcs.length}</button><button class="chip" data-t="matches" onclick="showMT('matches')">Matches ${mut.length}</button><button class="chip" data-t="received" onclick="showMT('received')">Received ${rec.length}</button><button class="chip" data-t="sent" onclick="showMT('sent')">Sent ${pen.length}</button></div>
+ <div class="mt" id="mt-chats">${pcs.map(prow).join('')||'<div class="panel">No private chats yet.</div>'}</div>
+ <div class="mt" id="mt-matches">${mut.map(i=>row(i,mb(i))).join('')||'<div class="panel">No matches yet.</div>'}</div>
+ <div class="mt" id="mt-received">${rec.map(i=>row(i,b('Accept','sendInterest',i)+`<button class="btn secondary" style="flex:0;padding:9px 12px" onclick="declineInt('${i}')">✕</button>`)).join('')||'<div class="panel">Nothing new.</div>'}</div>
+ <div class="mt" id="mt-sent">${pen.map(i=>row(i,'<span class="pill">Pending</span>')).join('')||'<div class="panel">No pending interests.</div>'}</div>`;showMT(MT);
 }
 function openChat(id){chatWith=id;go('chat')}
 function openPay(id){payWith=id;go('pay')}
