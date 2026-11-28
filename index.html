@@ -263,7 +263,7 @@ async function report(id){
  const{error}=await sb.from('reports').insert({reporter_id:me.id,reported_id:id,reason:r.slice(0,500)});
  toast(error?error.message:'Reported. Thank you');
 }
-let MT='matches';
+let MT='matches',PRE=false;
 function showMT(t){MT=t;document.querySelectorAll('#mtTabs .chip').forEach(c=>c.classList.toggle('active',c.dataset.t===t));document.querySelectorAll('.mt').forEach(d=>d.classList.toggle('hidden',d.id!=='mt-'+t))}
 async function matches(){
  const{sent,got,ts}=await ints(),ids=[...new Set([...sent,...got])];
@@ -275,7 +275,8 @@ async function matches(){
  const b=(t,f,id)=>`<button class="btn primary" style="flex:0;padding:9px 12px;white-space:nowrap" onclick="${f}('${id}')">${t}</button>`;
  const myPay={};if(mp?.gender==='Male'){const{data:py}=await sb.from('payments').select('other_id,status').eq('payer_id',me.id);(py||[]).forEach(y=>myPay[y.other_id]=y.status)}
  const can={};await Promise.all(mut.map(async i=>{const{data}=await sb.rpc('can_chat',{a:me.id,b:i});can[i]=data===true}));
- const mb=i=>can[i]?b('Chat','openChat',i):mp?.gender==='Male'?(myPay[i]==='pending'?'<span class="pill">Verifying payment</span>':b('Chat','openIntro',i)):'<span class="pill">Waiting for him</span>';
+ const sm={};if(mp?.gender==='Male')await Promise.all(mut.filter(i=>!can[i]).map(async i=>{const{data,error}=await sb.rpc('she_messaged',{o:i});sm[i]=!error&&data===true}));
+ const mb=i=>can[i]?b('Chat','openChat',i):mp?.gender==='Male'?(myPay[i]==='pending'?'<span class="pill">Verifying payment</span>':b(sm[i]?'💬 Chat':'Chat','openIntro',i)):b('Chat','openChat',i);
  const{data:irq}=await sb.from('intro_requests').select('payer_id,girl_id').in('status',['sent','accepted']);
  const pcs=[...new Set((irq||[]).filter(r=>r.payer_id===me.id||r.girl_id===me.id).map(r=>r.payer_id===me.id?r.girl_id:r.payer_id).filter(i=>!BL.has(i)))];
  const[{data:pcp},{data:pcm}]=pcs.length?await Promise.all([sb.from('profiles').select('id,name,age,city,avatar_url,verified').in('id',pcs),sb.from('messages').select('from_id,to_id,body,created_at').or(`from_id.eq.${me.id},to_id.eq.${me.id}`).order('created_at',{ascending:false}).limit(300)]):[{data:[]},{data:[]}];
@@ -331,16 +332,16 @@ async function sendMedia(kind,blob,ext,dur){
  if(error){sb.storage.from('chat-media').remove([path]);return toast(error.code==='42501'?(MEDIA_OK?'Chat locked':lockTxt):error.message)}
  if(dm)loadMsgs();else{await loadPM();pmBar()}}
 async function chat(){
- const{data:ok}=await sb.rpc('can_chat',{a:me.id,b:chatWith});if(ok!==true){toast('Chat locked');return go('matches')}if(REC)stopRec(false);MEDIA_OK=mp?.gender!=='Male';
+ const{data:ok}=await sb.rpc('can_chat',{a:me.id,b:chatWith});PRE=false;if(ok!==true){if(mp?.gender==='Female'){const[{data:x},{data:y}]=await Promise.all([sb.from('interests').select('from_id').eq('from_id',me.id).eq('to_id',chatWith).limit(1),sb.from('interests').select('from_id').eq('from_id',chatWith).eq('to_id',me.id).limit(1)]);PRE=!!(x&&x.length&&y&&y.length)}if(!PRE){toast('Chat locked');return go('matches')}}if(REC)stopRec(false);MEDIA_OK=mp?.gender!=='Male'&&!PRE;
  const{data:o}=await sb.from('profiles').select('name').eq('id',chatWith).maybeSingle();
- content.innerHTML=`<button class="small-link" onclick="go('matches')">← Back</button><button class="small-link" style="float:right;color:#ff8a80" onclick="blockUser('${chatWith}',true)">🚫 Block</button><h1>${esc(o?.name)}</h1><div class="panel" style="padding:10px;font-size:11px;color:#ffcdb8;background:#3a2530;margin:0 0 10px">⚠ Don't share your address or other personal details early. Meet only in public places. Report anyone who asks for money.</div><div id="msgs"></div><div id="recbar"></div><div style="display:flex;gap:8px;margin-top:10px;align-items:center">${mbtns()}<input id="mi" placeholder="Message..." onkeydown="if(event.key==='Enter')send()" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;padding:12px"><button class="btn primary" style="flex:0" onclick="send()">Send</button></div>${mnote()}`;
+ content.innerHTML=`<button class="small-link" onclick="go('matches')">← Back</button><button class="small-link" style="float:right;color:#ff8a80" onclick="blockUser('${chatWith}',true)">🚫 Block</button><h1>${esc(o?.name)}</h1><div class="panel" style="padding:10px;font-size:11px;color:#ffcdb8;background:#3a2530;margin:0 0 10px">⚠ Don't share your address or other personal details early. Meet only in public places. Report anyone who asks for money.</div>${PRE?'<div class="panel" style="padding:10px;font-size:12px;margin:0 0 10px">💬 You can message first. He can read and reply once he unlocks the chat.</div>':''}<div id="msgs"></div><div id="recbar"></div><div style="display:flex;gap:8px;margin-top:10px;align-items:center">${mbtns()}<input id="mi" placeholder="Message..." onkeydown="if(event.key==='Enter')send()" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;padding:12px"><button class="btn primary" style="flex:0" onclick="send()">Send</button></div>${mnote()}`;
  loadMsgs();
 }
 async function loadMsgs(){
  const el=$('msgs');if(!el||page!=='chat')return;const a=me.id,b=chatWith;
  const{data}=await sb.from('messages').select('*').or(`and(from_id.eq.${a},to_id.eq.${b}),and(from_id.eq.${b},to_id.eq.${a})`).order('created_at');
  const lm=(data||[]).filter(m=>m.to_id===a).pop();if(lm)setRead(b,lm.created_at);
- const U=await signed((data||[]).map(m=>m.media_path));setMediaUI(mp?.gender!=='Male'||(data||[]).some(m=>m.from_id===b));
+ const U=await signed((data||[]).map(m=>m.media_path));setMediaUI(!PRE&&(mp?.gender!=='Male'||(data||[]).some(m=>m.from_id===b)));
  el.innerHTML=(data||[]).map(m=>`<div class="bubble ${m.from_id===a?'me':''}">${mediaHtml(m,U)}</div>`).join('')||'<p>Say hi 👋</p>';el.scrollTop=el.scrollHeight;
 }
 async function send(){
