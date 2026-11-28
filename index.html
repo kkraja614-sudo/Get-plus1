@@ -618,7 +618,7 @@ async function pmBar(){
  if(mp?.gender!=='Male'){if(!$('pmi'))el.innerHTML=composer();return}
  const[{count},{data:u}]=await Promise.all([sb.from('plan_messages').select('id',{count:'exact',head:true}).eq('plan_id',chatPlan).eq('user_id',me.id),sb.from('plan_chat_unlocks').select('*').eq('plan_id',chatPlan).eq('user_id',me.id).maybeSingle()]);
  const left=FREE_MSGS-(count||0);
- if(u?.status==='paid'||left>0){el.innerHTML=(u?.status==='paid'&&chatHost?.id&&chatHost.id!==me.id?upsell():'')+composer()+(u?.status==='paid'?'':`<p style="font-size:11px">${left} free message${left>1?'s':''} left, then ₹${PFEE} to continue.</p>`);return}
+ if(u?.status==='paid'||left>0){el.innerHTML=(u?.status==='paid'&&chatHost?.id&&chatHost.id!==me.id?upsell():'')+composer()+'<p style="font-size:11px;opacity:.8">Phone numbers, Instagram and Telegram IDs are not allowed in group chat.</p>'+(u?.status==='paid'?'':`<p style="font-size:11px">${left} free message${left>1?'s':''} left, then ₹${PFEE} to continue.</p>`);return}
  if(u?.status==='pending'){el.innerHTML=`<div class="panel"><strong>Verifying your payment</strong><p style="margin:6px 0 0">Chat unlocks once the admin confirms.</p></div>`;return}
  el.innerHTML=`<div class="panel"><strong>Free messages used</strong><p style="margin:6px 0 10px">Pay ₹${PFEE} once to keep chatting in this plan.</p><strong>UPI ID: ${UPI_ID}</strong>${payHow(PFEE)}<div class="field"><label>UPI reference / UTR number</label><input id="cutr" inputmode="numeric"></div><button class="btn primary" style="width:100%" onclick="submitChatPay()">I have paid</button>${u?.status==='rejected'?'<p style="color:#ff8a8a">Payment not found. Check the UTR and try again.</p>':''}</div>`;
 }
@@ -634,7 +634,10 @@ async function loadPM(mark=true){
  el.scrollTop=el.scrollHeight;
  if(mark)sb.from('plan_reads').upsert({plan_id:chatPlan,user_id:me.id},{onConflict:'plan_id,user_id'}).then(()=>{});
 }
-async function sendPM(){const i=$('pmi'),t=i.value.trim();if(!t)return;i.value='';const{error}=await sb.from('plan_messages').insert({plan_id:chatPlan,user_id:me.id,body:t.slice(0,1000)});if(error)toast(error.code==='42501'?'Pay ₹'+PFEE+' to continue':error.message);else await loadPM();await pmBar();$('pmi')?.focus()}
+const NUMW='zero|one|two|three|four|five|six|seven|eight|nine|onnu|ondru|rendu|irandu|moonu|munu|naalu|nalu|anju|ainthu|aaru|ezhu|ettu|onbadhu|onbathu|poojyam|sunnam',NUMT='பூஜ்யம்|ஒன்று|ஒண்ணு|இரண்டு|ரெண்டு|மூன்று|மூணு|நான்கு|நாலு|ஐந்து|அஞ்சு|ஆறு|ஏழு|எட்டு|ஒன்பது';
+const CRULES=[/(\d[\s._-]*){8,}/,/@\s*\w{3,}/,/\b(insta+(gram|grm|gm)?|tele\s?gr\w*|snap(chat)?|whats\s?a+p+|watsa+p+|signal)\b/,/\b(ig|tg)\s?(id|handle|user\s?name|:)/,/t\.me|wa\.me|https?:|www\.|\w\.(com|me|link)\b/,/\b(dm|inbox)\s?me\b/,/\b(my|ur|your)\s?(num|number|no|mobile|phone|contact)\b/,/\b(number|num|mobile|phone|contact)\s?(tharen|thaaren|tharava|kudu|kuduka|venum|anuppu|send|share)\b/,new RegExp('((\\b('+NUMW+')\\b|'+NUMT+')[\\s,._-]*){6,}')];
+function hasContact(t){const n=t.normalize('NFKC').toLowerCase().replace(/[\uFE0F\u20E3]/g,'').replace(/[௦-௯]/g,c=>String(c.charCodeAt(0)-0xBE6)),d=n.replace(/[\s._*-]/g,'');return CRULES.some(r=>r.test(n))||/(instagram|telegram|whatsapp|இன்ஸ்ட|டெலிகி|டெலிக்ரா|வாட்ஸ்அப்|வாட்ஸப்|வாட்சப்|வாட்சாப்)/.test(d)}
+async function sendPM(){const i=$('pmi'),t=i.value.trim();if(!t)return;if(!mp?.is_admin&&hasContact(t))return toast('Phone numbers, Instagram or Telegram IDs are not allowed in group chat');i.value='';const{error}=await sb.from('plan_messages').insert({plan_id:chatPlan,user_id:me.id,body:t.slice(0,1000)});if(error)toast(error.code==='42501'?'Pay ₹'+PFEE+' to continue':error.message);else await loadPM();await pmBar();$('pmi')?.focus()}
 const IFEE=199,STL={pending:'Verifying payment',sent:'Chat open',accepted:'Chat open',declined:'Closed',expired:'Closed',rejected:'Payment not found'};let introWith=null;
 function openIntro(id){introWith=id;go('intro')}
 async function intro(){
